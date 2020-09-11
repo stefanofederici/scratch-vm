@@ -393,6 +393,12 @@ class Runtime extends EventEmitter {
          */
         this.removeCloudVariable = this._initializeRemoveCloudVariable(newCloudDataManager);
 
+        /**
+         * The number of frames that have been stepped.
+         * @type {number}
+         */
+        this.frame = 0;
+
         this.compilerOptions = {
             enabled: true,
             loopStuckChecking: false
@@ -2080,6 +2086,8 @@ class Runtime extends EventEmitter {
             }
             this.profiler.start(stepProfilerId);
         }
+
+        this.frame++;
 
         // Clean up threads that were told to stop during or since the last step
         this.threads = this.threads.filter(thread => !thread.isKilled);
