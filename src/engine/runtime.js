@@ -2080,6 +2080,22 @@ class Runtime extends EventEmitter {
      * inactive threads after each iteration.
      */
     _step () {
+        this.frame++;
+
+        // tw: ODD FRAME - Move sprites to their real position.
+        if (this.frame % 2 === 1) {
+            for (const target of this.targets) {
+                this.renderer.updateDrawablePosition(target.drawableID, [
+                    target.x,
+                    target.y
+                ]);
+            }
+            if (this.renderer) {
+                this.renderer.draw();
+            }
+            return;
+        }
+
         if (this.profiler !== null) {
             if (stepProfilerId === -1) {
                 stepProfilerId = this.profiler.idByName('Runtime._step');
@@ -2087,7 +2103,12 @@ class Runtime extends EventEmitter {
             this.profiler.start(stepProfilerId);
         }
 
-        this.frame++;
+        // tw: EVEN FRAME - Store interpolation data.
+        for (const target of this.targets) {
+            if (target.visible && !target.isStage) {
+                target.updateInterpolationData();
+            }
+        }
 
         // Clean up threads that were told to stop during or since the last step
         this.threads = this.threads.filter(thread => !thread.isKilled);
@@ -2121,6 +2142,23 @@ class Runtime extends EventEmitter {
         // Store threads that completed this iteration for testing and other
         // internal purposes.
         this._lastStepDoneThreads = doneThreads;
+        // tw: EVEN FRAME - Interpolate target positions.
+        for (const target of this.targets) {
+            const interpolationData = target._interpolationData;
+            if (interpolationData) {
+                const xDistance = Math.abs(target.x - interpolationData.x);
+                const yDistance = Math.abs(target.y - interpolationData.y);
+                if (Math.sqrt((xDistance * xDistance) + (yDistance * yDistance)) > 100) {
+                    // Movement is too large -- do not interpolate.
+                    // This could be, for example, a teleport from one side of the screen to the other. That shouldn't be interpolated.
+                    continue;
+                }
+                this.renderer.updateDrawablePosition(target.drawableID, [
+                    (interpolationData.x + target.x) / 2,
+                    (interpolationData.y + target.y) / 2
+                ]);
+            }
+        }
         if (this.renderer) {
             // @todo: Only render when this.redrawRequested or clones rendered.
             if (this.profiler !== null) {

@@ -161,6 +161,9 @@ class RenderedTarget extends Target {
          * @type {string}
          */
         this.textToSpeechLanguage = null;
+
+        // tw: data used for 60 FPS interpolation
+        this._interpolationData = null;
     }
 
     /**
@@ -1109,6 +1112,17 @@ class RenderedTarget extends Target {
                 this.runtime.requestRedraw();
             }
         }
+    }
+
+    updateInterpolationData () {
+        this._interpolationData = {
+            x: this.x,
+            y: this.y
+        };
+    }
+
+    removeInterpolationData () {
+        this._interpolationData = null;
     }
 }
 
