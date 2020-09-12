@@ -2173,6 +2173,7 @@ class Runtime extends EventEmitter {
                         Math.cos(currentRadians) + Math.cos(startingRadians)
                     ) * 180 / Math.PI;
                     // TODO: do we have to clamp direction?
+                    // TODO: do not interpolate on large changes
                     updateDrawableDirectionScale = true;
                 }
 
@@ -2180,12 +2181,15 @@ class Runtime extends EventEmitter {
                 if (scale[0] !== startingScale[0] || scale[1] !== startingScale[1]) {
                     // Do not interpolate size when the sign of either scale differs.
                     if (Math.sign(scale[0]) === Math.sign(startingScale[0]) && Math.sign(scale[1]) === Math.sign(startingScale[1])) {
-
-                        scale = [
-                            (scale[0] + startingScale[0]) / 2,
-                            (scale[1] + startingScale[1]) / 2
-                        ];
-                        updateDrawableDirectionScale = true;
+                        const change = Math.abs(scale[0] - startingScale[0]);
+                        // Only interpolate on small enough sizes. Anything larger is likely intended to be an instant change.
+                        if (change < 100) {
+                            scale = [
+                                (scale[0] + startingScale[0]) / 2,
+                                (scale[1] + startingScale[1]) / 2
+                            ];
+                            updateDrawableDirectionScale = true;
+                        }
                     }
                 }
 
