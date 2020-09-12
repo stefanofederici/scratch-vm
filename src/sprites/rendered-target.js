@@ -1120,7 +1120,8 @@ class RenderedTarget extends Target {
             x: this.x,
             y: this.y,
             direction: directionAndScale.direction,
-            scale: directionAndScale.scale
+            scale: directionAndScale.scale,
+            costume: this.currentCostume
         };
     }
 

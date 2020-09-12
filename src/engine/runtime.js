@@ -2149,53 +2149,61 @@ class Runtime extends EventEmitter {
         // tw: EVEN FRAME - Interpolate target positions.
         for (const target of this.targets) {
             const interpolationData = target.interpolationData;
-            if (interpolationData) {
-                const xDistance = Math.abs(target.x - interpolationData.x);
-                const yDistance = Math.abs(target.y - interpolationData.y);
-                // Do not interpolate when movement is large, as the project creator likely intends for this to be a teleport, not smooth movement.
-                if (Math.sqrt((xDistance * xDistance) + (yDistance * yDistance)) < 50) {
-                    const newX = (interpolationData.x + target.x) / 2;
-                    const newY = (interpolationData.y + target.y) / 2;
-                    this.renderer.updateDrawablePosition(target.drawableID, [newX, newY]);
-                }
+            // Do not interpolate if no data.
+            if (!interpolationData) {
+                continue;
+            }
 
-                const targetDirectionAndScale = target._getRenderedDirectionAndScale();
-                let direction = targetDirectionAndScale.direction;
-                let scale = targetDirectionAndScale.scale;
-                let updateDrawableDirectionScale = false;
+            // Do not interpolate if costume changed.
+            if (interpolationData.costume !== target.currentCostume) {
+                continue;
+            }
 
-                if (direction !== interpolationData.direction) {
-                    // The easiest way to find the average of two angles is using trig functions.
-                    const currentRadians = direction * Math.PI / 180;
-                    const startingRadians = interpolationData.direction * Math.PI / 180;
-                    direction = Math.atan2(
-                        Math.sin(currentRadians) + Math.sin(startingRadians),
-                        Math.cos(currentRadians) + Math.cos(startingRadians)
-                    ) * 180 / Math.PI;
-                    // TODO: do we have to clamp direction?
-                    // TODO: do not interpolate on large changes
-                    updateDrawableDirectionScale = true;
-                }
+            const xDistance = Math.abs(target.x - interpolationData.x);
+            const yDistance = Math.abs(target.y - interpolationData.y);
+            // Do not interpolate when movement is large, as this is likely intended to be a teleport, not smooth movement.
+            if (Math.sqrt((xDistance * xDistance) + (yDistance * yDistance)) < 50) {
+                const newX = (interpolationData.x + target.x) / 2;
+                const newY = (interpolationData.y + target.y) / 2;
+                this.renderer.updateDrawablePosition(target.drawableID, [newX, newY]);
+            }
 
-                const startingScale = interpolationData.scale;
-                if (scale[0] !== startingScale[0] || scale[1] !== startingScale[1]) {
-                    // Do not interpolate size when the sign of either scale differs.
-                    if (Math.sign(scale[0]) === Math.sign(startingScale[0]) && Math.sign(scale[1]) === Math.sign(startingScale[1])) {
-                        const change = Math.abs(scale[0] - startingScale[0]);
-                        // Only interpolate on small enough sizes. Anything larger is likely intended to be an instant change.
-                        if (change < 100) {
-                            scale = [
-                                (scale[0] + startingScale[0]) / 2,
-                                (scale[1] + startingScale[1]) / 2
-                            ];
-                            updateDrawableDirectionScale = true;
-                        }
+            const targetDirectionAndScale = target._getRenderedDirectionAndScale();
+            let direction = targetDirectionAndScale.direction;
+            let scale = targetDirectionAndScale.scale;
+            let updateDrawableDirectionScale = false;
+
+            if (direction !== interpolationData.direction) {
+                // The easiest way to find the average of two angles is using trig functions.
+                const currentRadians = direction * Math.PI / 180;
+                const startingRadians = interpolationData.direction * Math.PI / 180;
+                direction = Math.atan2(
+                    Math.sin(currentRadians) + Math.sin(startingRadians),
+                    Math.cos(currentRadians) + Math.cos(startingRadians)
+                ) * 180 / Math.PI;
+                // TODO: do we have to clamp direction?
+                // TODO: do not interpolate on large changes
+                updateDrawableDirectionScale = true;
+            }
+
+            const startingScale = interpolationData.scale;
+            if (scale[0] !== startingScale[0] || scale[1] !== startingScale[1]) {
+                // Do not interpolate size when the sign of either scale differs.
+                if (Math.sign(scale[0]) === Math.sign(startingScale[0]) && Math.sign(scale[1]) === Math.sign(startingScale[1])) {
+                    const change = Math.abs(scale[0] - startingScale[0]);
+                    // Only interpolate on small enough sizes. Anything larger is likely intended to be an instant change.
+                    if (change < 100) {
+                        scale = [
+                            (scale[0] + startingScale[0]) / 2,
+                            (scale[1] + startingScale[1]) / 2
+                        ];
+                        updateDrawableDirectionScale = true;
                     }
                 }
+            }
 
-                if (updateDrawableDirectionScale) {
-                    this.renderer.updateDrawableDirectionScale(target.drawableID, direction, scale);
-                }
+            if (updateDrawableDirectionScale) {
+                this.renderer.updateDrawableDirectionScale(target.drawableID, direction, scale);
             }
         }
         if (this.renderer) {
