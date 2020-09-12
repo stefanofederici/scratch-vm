@@ -30,6 +30,8 @@ const setupTargets = runtime => {
     }
 };
 
+const hypotenuse = (a, b) => Math.sqrt((a * a) + (b * b));
+
 const interpolateTargets = runtime => {
     for (const target of runtime.targets) {
         const interpolationData = target.interpolationData;
@@ -38,25 +40,38 @@ const interpolateTargets = runtime => {
             continue;
         }
 
-        const costumeDidChange = interpolationData.costume !== target.currentCostume;
-        const positionTolerance = costumeDidChange ? 10 : 50;
+        const drawableID = target.drawableID;
 
+        // Position interpolation.
         const xDistance = Math.abs(target.x - interpolationData.x);
         const yDistance = Math.abs(target.y - interpolationData.y);
-        // Do not interpolate when movement is large, as runtime is likely intended to be a teleport, not smooth movement.
-        if (Math.sqrt((xDistance * xDistance) + (yDistance * yDistance)) < positionTolerance) {
-            const newX = (interpolationData.x + target.x) / 2;
-            const newY = (interpolationData.y + target.y) / 2;
-            runtime.renderer.updateDrawablePosition(target.drawableID, [newX, newY]);
+        const totalPositionMovement = hypotenuse(xDistance, yDistance);
+        if (totalPositionMovement > 0) {
+            const bounds = runtime.renderer.getBounds(drawableID);
+
+            // Tolerance is based on the diagonal length of the sprite.
+            let positionTolerance = hypotenuse(bounds.width, bounds.height);
+            if (positionTolerance < 10) positionTolerance = 10;
+            if (positionTolerance > 50) positionTolerance = 50;
+
+            // Large movements are probably intended to be teleports, not smooth motion.
+            if (totalPositionMovement < positionTolerance) {
+                const newX = (interpolationData.x + target.x) / 2;
+                const newY = (interpolationData.y + target.y) / 2;
+                runtime.renderer.updateDrawablePosition(drawableID, [newX, newY]);
+            }
         }
 
+        // Effect interpolation.
         const ghostChange = Math.abs(target.effects.ghost - interpolationData.ghost);
-        // Make sure we don't interpolate a change from 0 to 100 ghost or other large changes like that.
+        // Make sure we don't interpolate a change from 0 to 100 ghost or other large changes.
         if (ghostChange > 0 && ghostChange < 25) {
             const newGhost = (target.effects.ghost + interpolationData.ghost) / 2;
-            runtime.renderer.updateDrawableEffect(target.drawableID, 'ghost', newGhost);
+            runtime.renderer.updateDrawableEffect(drawableID, 'ghost', newGhost);
         }
 
+        // Interpolate scale and direction.
+        const costumeDidChange = interpolationData.costume !== target.currentCostume;
         if (!costumeDidChange) {
             const targetDirectionAndScale = target._getRenderedDirectionAndScale();
             let direction = targetDirectionAndScale.direction;
@@ -93,7 +108,7 @@ const interpolateTargets = runtime => {
             }
 
             if (updateDrawableDirectionScale) {
-                runtime.renderer.updateDrawableDirectionScale(target.drawableID, direction, scale);
+                runtime.renderer.updateDrawableDirectionScale(drawableID, direction, scale);
             }
         }
     }
