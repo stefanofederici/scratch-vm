@@ -2085,10 +2085,14 @@ class Runtime extends EventEmitter {
         // tw: ODD FRAME - Move sprites to their real position.
         if (this.frame % 2 === 1) {
             for (const target of this.targets) {
-                this.renderer.updateDrawablePosition(target.drawableID, [
-                    target.x,
-                    target.y
-                ]);
+                if (target.interpolationData) {
+                    this.renderer.updateDrawablePosition(target.drawableID, [
+                        target.x,
+                        target.y
+                    ]);
+                    const targetDirectionAndScale = target._getRenderedDirectionAndScale();
+                    this.renderer.updateDrawableDirectionScale(target.drawableID, targetDirectionAndScale.direction, targetDirectionAndScale.scale);
+                }
             }
             if (this.renderer) {
                 this.renderer.draw();
@@ -2148,31 +2152,45 @@ class Runtime extends EventEmitter {
             if (interpolationData) {
                 const xDistance = Math.abs(target.x - interpolationData.x);
                 const yDistance = Math.abs(target.y - interpolationData.y);
+                // Do not interpolate when movement is large, as the project creator likely intends for this to be a teleport, not smooth movement.
                 if (Math.sqrt((xDistance * xDistance) + (yDistance * yDistance)) < 50) {
-                    this.renderer.updateDrawablePosition(target.drawableID, [
-                        (interpolationData.x + target.x) / 2,
-                        (interpolationData.y + target.y) / 2
-                    ]);
+                    const newX = (interpolationData.x + target.x) / 2;
+                    const newY = (interpolationData.y + target.y) / 2;
+                    this.renderer.updateDrawablePosition(target.drawableID, [newX, newY]);
                 }
 
-                // TODO: scale and rotation interpolation might be problematic when position also changed
                 const targetDirectionAndScale = target._getRenderedDirectionAndScale();
-                // Direction wraps around at 360.
-                const rotationDifference = Math.min(
-                    Math.abs(targetDirectionAndScale.direction - interpolationData.direction),
-                    360 - Math.abs(targetDirectionAndScale.direction - interpolationData.direction)
-                );
-                // scale is an array of [x, y], but we'll just use the x component. In Scratch they should always be the same.
-                const scaleDifference = Math.abs(targetDirectionAndScale.scale[0] - interpolationData.scale[0]);
-                if (rotationDifference < 90 && scaleDifference < 50) {
-                    this.renderer.updateDrawableDirectionScale(
-                        target.drawableID,
-                        ((targetDirectionAndScale.direction + interpolationData.direction) / 2) % 360,
-                        [
-                            (targetDirectionAndScale.scale[0] + interpolationData.scale[0]) / 2,
-                            (targetDirectionAndScale.scale[1] + interpolationData.scale[1]) / 2
-                        ]
-                    );
+                let direction = targetDirectionAndScale.direction;
+                let scale = targetDirectionAndScale.scale;
+                let updateDrawableDirectionScale = false;
+
+                if (direction !== interpolationData.direction) {
+                    // The easiest way to find the average of two angles is using trig functions.
+                    const currentRadians = direction * Math.PI / 180;
+                    const startingRadians = interpolationData.direction * Math.PI / 180;
+                    direction = Math.atan2(
+                        Math.sin(currentRadians) + Math.sin(startingRadians),
+                        Math.cos(currentRadians) + Math.cos(startingRadians)
+                    ) * 180 / Math.PI;
+                    // TODO: do we have to clamp direction?
+                    updateDrawableDirectionScale = true;
+                }
+
+                const startingScale = interpolationData.scale;
+                if (scale[0] !== startingScale[0] || scale[1] !== startingScale[1]) {
+                    // Do not interpolate size when the sign of either scale differs.
+                    if (Math.sign(scale[0]) === Math.sign(startingScale[0]) && Math.sign(scale[1]) === Math.sign(startingScale[1])) {
+
+                        scale = [
+                            (scale[0] + startingScale[0]) / 2,
+                            (scale[1] + startingScale[1]) / 2
+                        ];
+                        updateDrawableDirectionScale = true;
+                    }
+                }
+
+                if (updateDrawableDirectionScale) {
+                    this.renderer.updateDrawableDirectionScale(target.drawableID, direction, scale);
                 }
             }
         }
