@@ -2144,19 +2144,27 @@ class Runtime extends EventEmitter {
         this._lastStepDoneThreads = doneThreads;
         // tw: EVEN FRAME - Interpolate target positions.
         for (const target of this.targets) {
-            const interpolationData = target._interpolationData;
+            const interpolationData = target.interpolationData;
             if (interpolationData) {
                 const xDistance = Math.abs(target.x - interpolationData.x);
                 const yDistance = Math.abs(target.y - interpolationData.y);
-                if (Math.sqrt((xDistance * xDistance) + (yDistance * yDistance)) > 100) {
-                    // Movement is too large -- do not interpolate.
-                    // This could be, for example, a teleport from one side of the screen to the other. That shouldn't be interpolated.
-                    continue;
+                if (Math.sqrt((xDistance * xDistance) + (yDistance * yDistance)) < 50) {
+                    this.renderer.updateDrawablePosition(target.drawableID, [
+                        (interpolationData.x + target.x) / 2,
+                        (interpolationData.y + target.y) / 2
+                    ]);
                 }
-                this.renderer.updateDrawablePosition(target.drawableID, [
-                    (interpolationData.x + target.x) / 2,
-                    (interpolationData.y + target.y) / 2
-                ]);
+
+                const targetDirectionAndScale = target._getRenderedDirectionAndScale();
+                const rotationDifference = Math.abs(targetDirectionAndScale.direction - interpolationData.direction);
+                const scaleDifference = Math.abs(targetDirectionAndScale.scale - interpolationData.scale);
+                if (rotationDifference < 90 && scaleDifference < 1) {
+                    this.renderer.updateDrawableDirectionScale(
+                        target.drawableID,
+                        (targetDirectionAndScale.direction + interpolationData.direction) / 2,
+                        (targetDirectionAndScale.scale + interpolationData.scale) / 2
+                    );
+                }
             }
         }
         if (this.renderer) {

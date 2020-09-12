@@ -163,7 +163,7 @@ class RenderedTarget extends Target {
         this.textToSpeechLanguage = null;
 
         // tw: data used for 60 FPS interpolation
-        this._interpolationData = null;
+        this.interpolationData = null;
     }
 
     /**
@@ -1115,14 +1115,17 @@ class RenderedTarget extends Target {
     }
 
     updateInterpolationData () {
-        this._interpolationData = {
+        const directionAndScale = this._getRenderedDirectionAndScale();
+        this.interpolationData = {
             x: this.x,
-            y: this.y
+            y: this.y,
+            direction: directionAndScale.direction,
+            scale: directionAndScale.scale
         };
     }
 
     removeInterpolationData () {
-        this._interpolationData = null;
+        this.interpolationData = null;
     }
 }
 
