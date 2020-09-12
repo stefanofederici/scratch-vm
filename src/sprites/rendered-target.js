@@ -1121,7 +1121,8 @@ class RenderedTarget extends Target {
             y: this.y,
             direction: directionAndScale.direction,
             scale: directionAndScale.scale,
-            costume: this.currentCostume
+            costume: this.currentCostume,
+            ghost: this.effects.ghost
         };
     }
 

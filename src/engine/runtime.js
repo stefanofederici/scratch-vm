@@ -2092,6 +2092,7 @@ class Runtime extends EventEmitter {
                     ]);
                     const targetDirectionAndScale = target._getRenderedDirectionAndScale();
                     this.renderer.updateDrawableDirectionScale(target.drawableID, targetDirectionAndScale.direction, targetDirectionAndScale.scale);
+                    this.renderer.updateDrawableEffect(target.drawableID, 'ghost', target.effects.ghost);
                 }
             }
             if (this.renderer) {
@@ -2164,6 +2165,13 @@ class Runtime extends EventEmitter {
                 const newX = (interpolationData.x + target.x) / 2;
                 const newY = (interpolationData.y + target.y) / 2;
                 this.renderer.updateDrawablePosition(target.drawableID, [newX, newY]);
+            }
+
+            const ghostChange = Math.abs(target.effects.ghost - interpolationData.ghost);
+            // Make sure we don't interpolate a change from 0 to 100 ghost or other large changes like that.
+            if (ghostChange > 0 && ghostChange < 25) {
+                const newGhost = (target.effects.ghost + interpolationData.ghost) / 2;
+                this.renderer.updateDrawableEffect(target.drawableID, 'ghost', newGhost);
             }
 
             if (!costumeDidChange) {
