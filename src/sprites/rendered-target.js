@@ -161,9 +161,6 @@ class RenderedTarget extends Target {
          * @type {string}
          */
         this.textToSpeechLanguage = null;
-
-        // tw: data used for 60 FPS interpolation
-        this.interpolationData = null;
     }
 
     /**
@@ -1112,22 +1109,6 @@ class RenderedTarget extends Target {
                 this.runtime.requestRedraw();
             }
         }
-    }
-
-    updateInterpolationData () {
-        const directionAndScale = this._getRenderedDirectionAndScale();
-        this.interpolationData = {
-            x: this.x,
-            y: this.y,
-            direction: directionAndScale.direction,
-            scale: directionAndScale.scale,
-            costume: this.currentCostume,
-            ghost: this.effects.ghost
-        };
-    }
-
-    removeInterpolationData () {
-        this.interpolationData = null;
     }
 }
 

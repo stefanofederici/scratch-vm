@@ -15,7 +15,17 @@ const restoreTargets = runtime => {
 const setupTargets = runtime => {
     for (const target of runtime.targets) {
         if (target.visible && !target.isStage) {
-            target.updateInterpolationData();
+            const directionAndScale = target._getRenderedDirectionAndScale();
+            target.interpolationData = {
+                x: target.x,
+                y: target.y,
+                direction: directionAndScale.direction,
+                scale: directionAndScale.scale,
+                costume: target.currentCostume,
+                ghost: target.effects.ghost
+            };
+        } else {
+            target.interpolationData = null;
         }
     }
 };
