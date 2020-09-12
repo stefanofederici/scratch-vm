@@ -2155,14 +2155,23 @@ class Runtime extends EventEmitter {
                     ]);
                 }
 
+                // TODO: scale and rotation interpolation might be problematic when position also changed
                 const targetDirectionAndScale = target._getRenderedDirectionAndScale();
-                const rotationDifference = Math.abs(targetDirectionAndScale.direction - interpolationData.direction);
-                const scaleDifference = Math.abs(targetDirectionAndScale.scale - interpolationData.scale);
-                if (rotationDifference < 90 && scaleDifference < 1) {
+                // Direction wraps around at 360.
+                const rotationDifference = Math.min(
+                    Math.abs(targetDirectionAndScale.direction - interpolationData.direction),
+                    360 - Math.abs(targetDirectionAndScale.direction - interpolationData.direction)
+                );
+                // scale is an array of [x, y], but we'll just use the x component. In Scratch they should always be the same.
+                const scaleDifference = Math.abs(targetDirectionAndScale.scale[0] - interpolationData.scale[0]);
+                if (rotationDifference < 90 && scaleDifference < 50) {
                     this.renderer.updateDrawableDirectionScale(
                         target.drawableID,
-                        (targetDirectionAndScale.direction + interpolationData.direction) / 2,
-                        (targetDirectionAndScale.scale + interpolationData.scale) / 2
+                        ((targetDirectionAndScale.direction + interpolationData.direction) / 2) % 360,
+                        [
+                            (targetDirectionAndScale.scale[0] + interpolationData.scale[0]) / 2,
+                            (targetDirectionAndScale.scale[1] + interpolationData.scale[1]) / 2
+                        ]
                     );
                 }
             }
