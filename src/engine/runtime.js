@@ -42,6 +42,8 @@ const defaultBlockPackages = {
     scratch3_procedures: require('../blocks/scratch3_procedures')
 };
 
+const interpolate = require('./interpolate');
+
 const defaultExtensionColors = ['#0FBD8C', '#0DA57A', '#0B8E69'];
 
 /**
@@ -2082,19 +2084,8 @@ class Runtime extends EventEmitter {
     _step () {
         this.frame++;
 
-        // tw: ODD FRAME - Move sprites to their real position.
         if (this.frame % 2 === 1) {
-            for (const target of this.targets) {
-                if (target.interpolationData) {
-                    this.renderer.updateDrawablePosition(target.drawableID, [
-                        target.x,
-                        target.y
-                    ]);
-                    const targetDirectionAndScale = target._getRenderedDirectionAndScale();
-                    this.renderer.updateDrawableDirectionScale(target.drawableID, targetDirectionAndScale.direction, targetDirectionAndScale.scale);
-                    this.renderer.updateDrawableEffect(target.drawableID, 'ghost', target.effects.ghost);
-                }
-            }
+            interpolate.restoreTargets(this);
             if (this.renderer) {
                 this.renderer.draw();
             }
@@ -2108,12 +2099,7 @@ class Runtime extends EventEmitter {
             this.profiler.start(stepProfilerId);
         }
 
-        // tw: EVEN FRAME - Store interpolation data.
-        for (const target of this.targets) {
-            if (target.visible && !target.isStage) {
-                target.updateInterpolationData();
-            }
-        }
+        interpolate.setupTargets(this);
 
         // Clean up threads that were told to stop during or since the last step
         this.threads = this.threads.filter(thread => !thread.isKilled);
@@ -2147,73 +2133,7 @@ class Runtime extends EventEmitter {
         // Store threads that completed this iteration for testing and other
         // internal purposes.
         this._lastStepDoneThreads = doneThreads;
-        // tw: EVEN FRAME - Interpolate target positions.
-        for (const target of this.targets) {
-            const interpolationData = target.interpolationData;
-            // Do not interpolate if no data.
-            if (!interpolationData) {
-                continue;
-            }
-
-            const costumeDidChange = interpolationData.costume !== target.currentCostume;
-            const positionTolerance = costumeDidChange ? 10 : 50;
-
-            const xDistance = Math.abs(target.x - interpolationData.x);
-            const yDistance = Math.abs(target.y - interpolationData.y);
-            // Do not interpolate when movement is large, as this is likely intended to be a teleport, not smooth movement.
-            if (Math.sqrt((xDistance * xDistance) + (yDistance * yDistance)) < positionTolerance) {
-                const newX = (interpolationData.x + target.x) / 2;
-                const newY = (interpolationData.y + target.y) / 2;
-                this.renderer.updateDrawablePosition(target.drawableID, [newX, newY]);
-            }
-
-            const ghostChange = Math.abs(target.effects.ghost - interpolationData.ghost);
-            // Make sure we don't interpolate a change from 0 to 100 ghost or other large changes like that.
-            if (ghostChange > 0 && ghostChange < 25) {
-                const newGhost = (target.effects.ghost + interpolationData.ghost) / 2;
-                this.renderer.updateDrawableEffect(target.drawableID, 'ghost', newGhost);
-            }
-
-            if (!costumeDidChange) {
-                const targetDirectionAndScale = target._getRenderedDirectionAndScale();
-                let direction = targetDirectionAndScale.direction;
-                let scale = targetDirectionAndScale.scale;
-                let updateDrawableDirectionScale = false;
-    
-                if (direction !== interpolationData.direction) {
-                    // The easiest way to find the average of two angles is using trig functions.
-                    const currentRadians = direction * Math.PI / 180;
-                    const startingRadians = interpolationData.direction * Math.PI / 180;
-                    direction = Math.atan2(
-                        Math.sin(currentRadians) + Math.sin(startingRadians),
-                        Math.cos(currentRadians) + Math.cos(startingRadians)
-                    ) * 180 / Math.PI;
-                    // TODO: do we have to clamp direction?
-                    // TODO: do not interpolate on large changes
-                    updateDrawableDirectionScale = true;
-                }
-    
-                const startingScale = interpolationData.scale;
-                if (scale[0] !== startingScale[0] || scale[1] !== startingScale[1]) {
-                    // Do not interpolate size when the sign of either scale differs.
-                    if (Math.sign(scale[0]) === Math.sign(startingScale[0]) && Math.sign(scale[1]) === Math.sign(startingScale[1])) {
-                        const change = Math.abs(scale[0] - startingScale[0]);
-                        // Only interpolate on small enough sizes. Anything larger is likely intended to be an instant change.
-                        if (change < 100) {
-                            scale = [
-                                (scale[0] + startingScale[0]) / 2,
-                                (scale[1] + startingScale[1]) / 2
-                            ];
-                            updateDrawableDirectionScale = true;
-                        }
-                    }
-                }
-    
-                if (updateDrawableDirectionScale) {
-                    this.renderer.updateDrawableDirectionScale(target.drawableID, direction, scale);
-                }
-            }
-        }
+        interpolate.interpolateTargets(this);
         if (this.renderer) {
             // @todo: Only render when this.redrawRequested or clones rendered.
             if (this.profiler !== null) {
