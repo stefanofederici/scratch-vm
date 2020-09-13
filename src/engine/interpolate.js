@@ -46,7 +46,7 @@ const interpolateTargets = runtime => {
         const xDistance = Math.abs(target.x - interpolationData.x);
         const yDistance = Math.abs(target.y - interpolationData.y);
         const totalPositionMovement = hypotenuse(xDistance, yDistance);
-        if (totalPositionMovement >= 1) {
+        if (totalPositionMovement > 0.1) {
             const bounds = runtime.renderer.getBounds(drawableID);
 
             // Tolerance is based on the diagonal length of the sprite.
