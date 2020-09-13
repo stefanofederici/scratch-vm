@@ -46,15 +46,13 @@ const interpolateTargets = runtime => {
         const xDistance = Math.abs(target.x - interpolationData.x);
         const yDistance = Math.abs(target.y - interpolationData.y);
         const totalPositionMovement = hypotenuse(xDistance, yDistance);
-        if (totalPositionMovement > 0) {
+        if (totalPositionMovement >= 1) {
             const bounds = runtime.renderer.getBounds(drawableID);
 
             // Tolerance is based on the diagonal length of the sprite.
-            let positionTolerance = hypotenuse(bounds.width, bounds.height);
-            if (positionTolerance < 10) positionTolerance = 10;
+            let positionTolerance = 10 + hypotenuse(bounds.width, bounds.height);
             if (positionTolerance > 50) positionTolerance = 50;
 
-            // Large movements are probably intended to be teleports, not smooth motion.
             if (totalPositionMovement < positionTolerance) {
                 const newX = (interpolationData.x + target.x) / 2;
                 const newY = (interpolationData.y + target.y) / 2;
@@ -86,7 +84,6 @@ const interpolateTargets = runtime => {
                     Math.sin(currentRadians) + Math.sin(startingRadians),
                     Math.cos(currentRadians) + Math.cos(startingRadians)
                 ) * 180 / Math.PI;
-                // TODO: do we have to clamp direction?
                 // TODO: do not interpolate on large changes
                 updateDrawableDirectionScale = true;
             }
