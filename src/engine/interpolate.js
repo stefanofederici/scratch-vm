@@ -33,6 +33,10 @@ const setupTargets = runtime => {
 const hypotenuse = (a, b) => Math.sqrt((a * a) + (b * b));
 
 const interpolateTargets = runtime => {
+    const renderer = runtime.renderer;
+    if (!renderer) {
+        return;
+    }
     for (const target of runtime.targets) {
         const interpolationData = target.interpolationData;
         // Do not interpolate if no data.
@@ -47,7 +51,9 @@ const interpolateTargets = runtime => {
         const yDistance = Math.abs(target.y - interpolationData.y);
         const totalPositionMovement = hypotenuse(xDistance, yDistance);
         if (totalPositionMovement > 0.1) {
-            const bounds = runtime.renderer.getBounds(drawableID);
+            const drawable = renderer._allDrawables[drawableID];
+            // getAABB is less accurate than getBounds, but at least it's much faster.
+            const bounds = drawable.getAABB();
 
             // Tolerance is based on the diagonal length of the sprite.
             let positionTolerance = 10 + hypotenuse(bounds.width, bounds.height);
@@ -56,7 +62,7 @@ const interpolateTargets = runtime => {
             if (totalPositionMovement < positionTolerance) {
                 const newX = (interpolationData.x + target.x) / 2;
                 const newY = (interpolationData.y + target.y) / 2;
-                runtime.renderer.updateDrawablePosition(drawableID, [newX, newY]);
+                renderer.updateDrawablePosition(drawableID, [newX, newY]);
             }
         }
 
@@ -65,7 +71,7 @@ const interpolateTargets = runtime => {
         // Make sure we don't interpolate a change from 0 to 100 ghost or other large changes.
         if (ghostChange > 0 && ghostChange < 25) {
             const newGhost = (target.effects.ghost + interpolationData.ghost) / 2;
-            runtime.renderer.updateDrawableEffect(drawableID, 'ghost', newGhost);
+            renderer.updateDrawableEffect(drawableID, 'ghost', newGhost);
         }
 
         // Interpolate scale and direction.
@@ -105,7 +111,7 @@ const interpolateTargets = runtime => {
             }
 
             if (updateDrawableDirectionScale) {
-                runtime.renderer.updateDrawableDirectionScale(drawableID, direction, scale);
+                renderer.updateDrawableDirectionScale(drawableID, direction, scale);
             }
         }
     }
