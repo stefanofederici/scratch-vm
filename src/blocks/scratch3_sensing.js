@@ -14,7 +14,7 @@ class Scratch3SensingBlocks {
          * The "answer" block value.
          * @type {string}
          */
-        this._answer = '';
+        this._answer = ''; // used by compiler
 
         /**
          * The timer utility.
@@ -211,7 +211,8 @@ class Scratch3SensingBlocks {
     }
 
     getTimer (args, util) {
-        return util.ioQuery('clock', 'projectTimer');
+        // tw: use precise time
+        return util.ioQuery('clock', 'preciseProjectTimer');
     }
 
     resetTimer (args, util) {

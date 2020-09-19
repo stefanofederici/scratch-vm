@@ -349,13 +349,13 @@ class JSGenerator {
         case 'op.abs':
             return new TypedInput(`Math.abs(${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER);
         case 'op.acos':
-            return new TypedInput(`((Math.acos(${this.descendInput(node.value).asNumber()}) * 180) / Math.PI)`, TYPE_NUMBER);
+            return new TypedInput(`((Math.acos(${this.descendInput(node.value).asNumber()}) * 180) / Math.PI)`, TYPE_NUMBER_NAN);
         case 'op.add':
             return new TypedInput(`(${this.descendInput(node.left).asNumber()} + ${this.descendInput(node.right).asNumber()})`, TYPE_NUMBER);
         case 'op.and':
             return new TypedInput(`(${this.descendInput(node.left).asBoolean()} && ${this.descendInput(node.right).asBoolean()})`, TYPE_BOOLEAN);
         case 'op.asin':
-            return new TypedInput(`((Math.asin(${this.descendInput(node.value).asNumber()}) * 180) / Math.PI)`, TYPE_NUMBER);
+            return new TypedInput(`((Math.asin(${this.descendInput(node.value).asNumber()}) * 180) / Math.PI)`, TYPE_NUMBER_NAN);
         case 'op.atan':
             return new TypedInput(`((Math.atan(${this.descendInput(node.value).asNumber()}) * 180) / Math.PI)`, TYPE_NUMBER);
         case 'op.ceiling':
@@ -394,7 +394,7 @@ class JSGenerator {
         case 'op.e^':
             return new TypedInput(`Math.exp(${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER);
         case 'op.floor':
-            return new TypedInput(`Math.floor(${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER);
+            return new TypedInput(`(${this.descendInput(node.value).asNumber()} | 0)`, TYPE_NUMBER);
         case 'op.greater': {
             const left = this.descendInput(node.left);
             const right = this.descendInput(node.right);
@@ -462,10 +462,35 @@ class JSGenerator {
         case 'op.10^':
             return new TypedInput(`Math.pow(10, ${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER);
 
+        case 'sensing.answer':
+            return new TypedInput(`runtime.ext_scratch3_sensing._answer`, TYPE_STRING);
         case 'sensing.colorTouchingColor':
             return new TypedInput(`target.colorIsTouchingColor(colorToList(${this.descendInput(node.target).asUnknown()}), colorToList(${this.descendInput(node.mask).asUnknown()}))`, TYPE_BOOLEAN);
+        case 'sensing.current':
+            switch (node.property) {
+            case 'year':
+                return new TypedInput(`(new Date().getFullYear())`, TYPE_NUMBER);
+            case 'month':
+                return new TypedInput(`(new Date().getMonth() + 1)`, TYPE_NUMBER);
+            case 'date':
+                return new TypedInput(`(new Date().getDate())`, TYPE_NUMBER);
+            case 'dayofweek':
+                return new TypedInput(`(new Date().getDay() + 1)`, TYPE_NUMBER);
+            case 'hour':
+                return new TypedInput(`(new Date().getHours())`, TYPE_NUMBER);
+            case 'minute':
+                return new TypedInput(`(new Date().getMinutes())`, TYPE_NUMBER);
+            case 'second':
+                return new TypedInput(`(new Date().getSeconds())`, TYPE_NUMBER);
+            }
+            return new ConstantInput(0);
         case 'sensing.daysSince2000':
             return new TypedInput('daysSince2000()', TYPE_NUMBER);
+        case 'sensing.distance':
+            // TODO: on stages, this can be computed at compile time
+            return new TypedInput(`distance(${this.descendInput(node.target).asString()})`, TYPE_NUMBER);
+        case 'sensing.of':
+            return new TypedInput(`runtime.ext_scratch3_sensing.getAttributeOf({OBJECT: ${this.descendInput(node.object).asString()}, PROPERTY: "${sanitize(node.property)}" })`, TYPE_UNKNOWN);
         case 'sensing.touching':
             return new TypedInput(`target.isTouchingObject(${this.descendInput(node.object).asUnknown()})`, TYPE_BOOLEAN);
         case 'sensing.touchingColor':
@@ -474,7 +499,7 @@ class JSGenerator {
             return new TypedInput('ioQuery("userData", "getUsername")', TYPE_STRING);
 
         case 'timer.get':
-            return new TypedInput('ioQuery("clock", "projectTimer")', TYPE_NUMBER);
+            return new TypedInput('ioQuery("clock", "preciseProjectTimer")', TYPE_NUMBER);
 
         case 'tw.lastKeyPressed':
             return new TypedInput('ioQuery("keyboard", "getLastKeyPressed")', TYPE_STRING);
@@ -509,6 +534,7 @@ class JSGenerator {
             this.source += '}\n';
             break;
         case 'control.for': {
+            this.resetVariableInputs();
             const index = this.localVariables.next();
             this.source += `var ${index} = 0; `;
             this.source += `while (${index} < ${this.descendInput(node.count).asNumber()}) { `;
@@ -565,12 +591,14 @@ class JSGenerator {
             break;
         }
         case 'control.waitUntil': {
+            this.resetVariableInputs();
             this.source += `while (!${this.descendInput(node.condition).asBoolean()}) {\n`;
             this.yieldNotWarpOrStuck();
             this.source += `}\n`;
             break;
         }
         case 'control.while':
+            this.resetVariableInputs();
             this.source += `while (${this.descendInput(node.condition).asBoolean()}) {\n`;
             this.descendStack(node.do);
             this.yieldLoop();
@@ -751,6 +779,10 @@ class JSGenerator {
             this.source += 'ioQuery("clock", "resetProjectTimer");\n';
             break;
 
+        case 'tw.debugger':
+            this.source += 'debugger;\n';
+            break;
+
         case 'var.hide':
             this.source += `runtime.monitorBlocks.changeBlock({ id: "${sanitize(node.variable.id)}", element: "checkbox", value: false }, runtime);\n`;
             break;
@@ -774,10 +806,14 @@ class JSGenerator {
         }
     }
 
+    resetVariableInputs () {
+        this.variableInputs = {};
+    }
+
     descendStack (nodes) {
         // Entering a stack -- all bets are off.
         // TODO: allow if/else to inherit values
-        this.variableInputs = {};
+        this.resetVariableInputs();
 
         for (const node of nodes) {
             this.descendStackedBlock(node);
@@ -785,7 +821,7 @@ class JSGenerator {
 
         // Leaving a stack -- any assumptions made in the current stack do not apply outside of it
         // TODO: in if/else this might create an extra unused object
-        this.variableInputs = {};
+        this.resetVariableInputs();
     }
 
     descendVariable (variable) {
@@ -856,7 +892,7 @@ class JSGenerator {
 
     yielded () {
         // Control may have been yielded to another script -- all bets are off.
-        this.variableInputs = {};
+        this.resetVariableInputs();
     }
 
     /**
@@ -967,7 +1003,8 @@ class JSGenerator {
         const factory = this.createScriptFactory();
         const fn = execute.scopedEval(factory);
 
-        log.info(`JS: ${this.target.sprite.name}: compiled ${this.script.procedureCode || 'script'}`, factory);
+        const spriteName = this.target.sprite ? this.target.sprite.name : 'unnamed';
+        log.info(`JS: ${spriteName}: compiled ${this.script.procedureCode || 'script'}`, factory);
 
         return fn;
     }

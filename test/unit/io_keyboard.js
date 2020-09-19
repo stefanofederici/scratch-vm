@@ -71,6 +71,7 @@ test('non-english key', t => {
     t.end();
 });
 
+/* tw: disable test: we intentionally add support for modifier keys
 test('ignore modifier key', t => {
     const rt = new Runtime();
     const k = new Keyboard(rt);
@@ -83,6 +84,7 @@ test('ignore modifier key', t => {
     t.strictEquals(k.getKeyIsDown('any'), false);
     t.end();
 });
+*/
 
 test('keyup', t => {
     const rt = new Runtime();
@@ -99,5 +101,44 @@ test('keyup', t => {
     t.strictDeepEquals(k._keysPressed, []);
     t.strictEquals(k.getKeyIsDown('left arrow'), false);
     t.strictEquals(k.getKeyIsDown('any'), false);
+    t.end();
+});
+
+test('tw: extended spec', t => {
+    const rt = new Runtime();
+    const k = new Keyboard(rt);
+
+    t.type(k.getLastKeyPressed, 'function');
+    t.end();
+});
+
+test('tw: extended key support', t => {
+    const rt = new Runtime();
+    const k = new Keyboard(rt);
+
+    k.postData({
+        key: 'Backspace',
+        isDown: true
+    });
+    t.strictDeepEquals(k._keysPressed, ['backspace']);
+    t.strictEqual(k.getKeyIsDown('backspace'), true);
+    t.end();
+});
+
+test('tw: last key pressed', t => {
+    const rt = new Runtime();
+    const k = new Keyboard(rt);
+
+    t.strictEqual(k.getLastKeyPressed(), '');
+    k.postData({
+        key: 'a',
+        isDown: true
+    });
+    t.strictEqual(k.getLastKeyPressed(), 'a');
+    k.postData({
+        key: 'b',
+        isDown: true
+    });
+    t.strictEqual(k.getLastKeyPressed(), 'b');
     t.end();
 });

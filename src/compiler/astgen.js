@@ -563,11 +563,20 @@ class ScriptTreeGenerator {
                 value: block.fields.colorParam.value
             };
 
+        case 'sensing_answer':
+            return {
+                kind: 'sensing.answer'
+            };
         case 'sensing_coloristouchingcolor':
             return {
                 kind: 'sensing.colorTouchingColor',
                 target: this.descendInput(block, 'COLOR2'),
                 mask: this.descendInput(block, 'COLOR')
+            };
+        case 'sensing_current':
+            return {
+                kind: 'sensing.current',
+                property: block.fields.CURRENTMENU.value.toLowerCase()
             };
         case 'sensing_dayssince2000':
             return {
@@ -577,6 +586,11 @@ class ScriptTreeGenerator {
             return {
                 kind: 'constant',
                 value: block.fields.DISTANCETOMENU.value
+            };
+        case 'sensing_distanceto':
+            return {
+                kind: 'sensing.distance',
+                target: this.descendInput(block, 'DISTANCETOMENU')
             };
         case 'sensing_keyoptions':
             return {
@@ -604,6 +618,12 @@ class ScriptTreeGenerator {
             return {
                 kind: 'constant',
                 value: block.fields.OBJECT.value
+            };
+        case 'sensing_of':
+            return {
+                kind: 'sensing.of',
+                property: block.fields.PROPERTY.value,
+                object: this.descendInput(block, 'OBJECT')
             };
         case 'sensing_timer':
             return {
@@ -1097,6 +1117,11 @@ class ScriptTreeGenerator {
             // setting of yields will be handled later in the analysis phase
 
             const procedureCode = block.mutation.proccode;
+            if (procedureCode === 'tw:debugger;') {
+                return {
+                    kind: 'tw.debugger'
+                };
+            }
             const paramNamesIdsAndDefaults = this.blocks.getProcedureParamNamesIdsAndDefaults(procedureCode);
             if (paramNamesIdsAndDefaults === null) {
                 return {
