@@ -30,8 +30,6 @@ const setupTargets = runtime => {
     }
 };
 
-const hypotenuse = (a, b) => Math.sqrt((a * a) + (b * b));
-
 const interpolateTargets = runtime => {
     const renderer = runtime.renderer;
     if (!renderer) {
@@ -49,17 +47,15 @@ const interpolateTargets = runtime => {
         // Position interpolation.
         const xDistance = Math.abs(target.x - interpolationData.x);
         const yDistance = Math.abs(target.y - interpolationData.y);
-        const totalPositionMovement = hypotenuse(xDistance, yDistance);
-        if (totalPositionMovement > 0.1) {
+        if (xDistance > 0.1 || yDistance > 0.1) {
             const drawable = renderer._allDrawables[drawableID];
-            // getAABB is less accurate than getBounds, but at least it's much faster.
+            // getAABB is less accurate than getBounds, but it's much faster
             const bounds = drawable.getAABB();
 
-            // Tolerance is based on the diagonal length of the sprite.
-            let positionTolerance = 10 + hypotenuse(bounds.width, bounds.height);
-            if (positionTolerance > 50) positionTolerance = 50;
+            const xTolerance = Math.min(50, 10 + bounds.width);
+            const yTolerance = Math.min(50, 10 + bounds.height);
 
-            if (totalPositionMovement < positionTolerance) {
+            if (xDistance < xTolerance && yDistance < yTolerance) {
                 const newX = (interpolationData.x + target.x) / 2;
                 const newY = (interpolationData.y + target.y) / 2;
                 renderer.updateDrawablePosition(drawableID, [newX, newY]);
