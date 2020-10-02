@@ -664,6 +664,7 @@ class JSGenerator {
         case 'looks.hide':
             this.source += 'target.setVisible(false);\n';
             this.source += 'runtime.ext_scratch3_looks._renderBubble(target);\n';
+            this.source += `if (target.interpolationData) target.interpolationData = null;\n`;
             break;
         case 'looks.setSize':
             this.source += `target.setSize(${this.descendInput(node.size).asNumber()});\n`;
