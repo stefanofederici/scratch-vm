@@ -21,8 +21,8 @@ const TYPE_UNKNOWN = 4;
 const TYPE_NUMBER_NAN = 5;
 
 // Pen-related constants
-const pen = 'runtime.ext_pen';
-const penState = `${pen}._getPenState(target)`;
+const PEN_EXT = 'runtime.ext_pen';
+const PEN_STATE = `${PEN_EXT}._getPenState(target)`;
 
 /**
  * Variable pool used for factory function names.
@@ -149,6 +149,7 @@ class ConstantInput {
 
 /**
  * SafeConstantInput is similar to ConstantInput, except that asUnknown() will always convert to String.
+ * @implements {Input}
  */
 class SafeConstantInput extends ConstantInput {
     asUnknown () {
@@ -188,6 +189,7 @@ class VariableInput {
                 input = input._value;
             } else {
                 this.type = TYPE_UNKNOWN;
+                this._value = null;
                 return;
             }
         }
@@ -251,19 +253,6 @@ disableToString(TypedInput.prototype.asString);
 disableToString(TypedInput.prototype.asBoolean);
 disableToString(TypedInput.prototype.asUnknown);
 
-/**
- * Determine if an input is a constant that is a non-zero number.
- * @param {Input} input The input to examine.
- * @returns {boolean} true if the input is a constant non-zero number
- */
-const isNonZeroNumberConstant = input => {
-    if (!(input instanceof ConstantInput)) {
-        return false;
-    }
-    const value = +input.constantValue;
-    return value !== 0;
-};
-
 class JSGenerator {
     constructor (script, ast, target) {
         this.script = script;
@@ -278,7 +267,7 @@ class JSGenerator {
 
         this.isWarp = script.isWarp;
         this.isProcedure = script.isProcedure;
-        this.loopStuckChecking = script.loopStuckChecking;
+        this.warpTimer = script.warpTimer;
 
         this.localVariables = new VariablePool('a');
         this._setupVariablesPool = new VariablePool('b');
@@ -379,20 +368,11 @@ class JSGenerator {
             if (leftAlwaysNumber && rightAlwaysNumber) {
                 return new TypedInput(`(${left.asNumber()} === ${right.asNumber()})`, TYPE_BOOLEAN);
             }
-            // When one operand is known to be a non-zero constant, we can use ===
-            // 0 is not allowed here as NaN will get converted to zero, and "apple or any other NaN value = 0" should not return true.
-            // todo: this might be unsafe
-            if (leftAlwaysNumber && isNonZeroNumberConstant(left)) {
-                return new TypedInput(`(${left.asNumber()} === ${right.asNumber()})`, TYPE_BOOLEAN);
-            }
-            if (rightAlwaysNumber && isNonZeroNumberConstant(right)) {
-                return new TypedInput(`(${left.asNumber()} === ${right.asNumber()})`, TYPE_BOOLEAN);
-            }
             // No compile-time optimizations possible - use fallback method.
             return new TypedInput(`compareEqual(${left.asUnknown()}, ${right.asUnknown()})`, TYPE_BOOLEAN);
         }
         case 'op.e^':
-            return new TypedInput(`Math.exp(${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER);
+            return new TypedInput(`(Math.E ** ${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER);
         case 'op.floor':
             return new TypedInput(`Math.floor(${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER);
         case 'op.greater': {
@@ -460,7 +440,7 @@ class JSGenerator {
         case 'op.tan':
             return new TypedInput(`Math.tan(${this.descendInput(node.value).asNumber()} * Math.PI / 180)`, TYPE_NUMBER);
         case 'op.10^':
-            return new TypedInput(`Math.pow(10, ${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER);
+            return new TypedInput(`(10 ** ${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER);
 
         case 'sensing.answer':
             return new TypedInput(`runtime.ext_scratch3_sensing._answer`, TYPE_STRING);
@@ -618,9 +598,25 @@ class JSGenerator {
             this.source += `${list}._monitorUpToDate = false;\n`;
             break;
         }
-        case 'list.delete':
-            this.source += `listDelete(${this.referenceVariable(node.list)}, ${this.descendInput(node.index).asUnknown()});\n`;
+        case 'list.delete': {
+            const list = this.referenceVariable(node.list);
+            const index = this.descendInput(node.index);
+            if (index instanceof ConstantInput) {
+                if (index.constantValue === 'last') {
+                    this.source += `${list}.value.pop();\n`;
+                    this.source += `${list}._monitorUpToDate = false;\n`;
+                    break;
+                }
+                if (+index.constantValue === 1) {
+                    this.source += `${list}.value.shift();\n`;
+                    this.source += `${list}._monitorUpToDate = false;\n`;
+                    break;
+                }
+                // do not need optimization for all: that is done at the AST level
+            }
+            this.source += `listDelete(${list}, ${index.asUnknown()});\n`;
             break;
+        }
         case 'list.deleteAll':
             this.source += `${this.referenceVariable(node.list)}.value = [];\n`;
             break;
@@ -703,43 +699,43 @@ class JSGenerator {
             break;
 
         case 'pen.clear':
-            this.source += `${pen}.clear();\n`;
+            this.source += `${PEN_EXT}.clear();\n`;
             break;
         case 'pen.down':
-            this.source += `${pen}._penDown(target);\n`;
+            this.source += `${PEN_EXT}._penDown(target);\n`;
             break;
         case 'pen.changeParam':
-            this.source += `${pen}._setOrChangeColorParam(${this.descendInput(node.param).asString()}, ${this.descendInput(node.value).asNumber()}, ${penState}, true);\n`;
+            this.source += `${PEN_EXT}._setOrChangeColorParam(${this.descendInput(node.param).asString()}, ${this.descendInput(node.value).asNumber()}, ${PEN_STATE}, true);\n`;
             break;
         case 'pen.changeSize':
-            this.source += `${pen}._changePenSizeBy(${this.descendInput(node.size).asNumber()}, target);\n`;
+            this.source += `${PEN_EXT}._changePenSizeBy(${this.descendInput(node.size).asNumber()}, target);\n`;
             break;
         case 'pen.legacyChangeHue':
-            this.source += `${pen}._changePenHueBy(${this.descendInput(node.hue).asNumber()}, target);\n`;
+            this.source += `${PEN_EXT}._changePenHueBy(${this.descendInput(node.hue).asNumber()}, target);\n`;
             break;
         case 'pen.legacyChangeShade':
-            this.source += `${pen}._changePenShadeBy(${this.descendInput(node.shade).asNumber()}, target);\n`;
+            this.source += `${PEN_EXT}._changePenShadeBy(${this.descendInput(node.shade).asNumber()}, target);\n`;
             break;
         case 'pen.legacySetHue':
-            this.source += `${pen}._setPenHueToNumber(${this.descendInput(node.hue).asNumber()}, target);\n`;
+            this.source += `${PEN_EXT}._setPenHueToNumber(${this.descendInput(node.hue).asNumber()}, target);\n`;
             break;
         case 'pen.legacySetShade':
-            this.source += `${pen}._setPenShadeToNumber(${this.descendInput(node.shade).asNumber()}, target);\n`;
+            this.source += `${PEN_EXT}._setPenShadeToNumber(${this.descendInput(node.shade).asNumber()}, target);\n`;
             break;
         case 'pen.setColor':
-            this.source += `${pen}._setPenColorToColor(${this.descendInput(node.color).asUnknown()}, target);\n`;
+            this.source += `${PEN_EXT}._setPenColorToColor(${this.descendInput(node.color).asUnknown()}, target);\n`;
             break;
         case 'pen.setParam':
-            this.source += `${pen}._setOrChangeColorParam(${this.descendInput(node.param).asString()}, ${this.descendInput(node.value).asNumber()}, ${penState}, false);\n`;
+            this.source += `${PEN_EXT}._setOrChangeColorParam(${this.descendInput(node.param).asString()}, ${this.descendInput(node.value).asNumber()}, ${PEN_STATE}, false);\n`;
             break;
         case 'pen.setSize':
-            this.source += `${pen}._setPenSizeTo(${this.descendInput(node.size).asNumber()}, target);\n`;
+            this.source += `${PEN_EXT}._setPenSizeTo(${this.descendInput(node.size).asNumber()}, target);\n`;
             break;
         case 'pen.stamp':
-            this.source += `${pen}._stamp(target);\n`;
+            this.source += `${PEN_EXT}._stamp(target);\n`;
             break;
         case 'pen.up':
-            this.source += `${pen}._penUp(target);\n`;
+            this.source += `${PEN_EXT}._penUp(target);\n`;
             break;
 
         case 'procedures.call': {
@@ -861,7 +857,7 @@ class JSGenerator {
     }
 
     yieldLoop () {
-        if (this.loopStuckChecking) {
+        if (this.warpTimer) {
             this.yieldNotWarpOrStuck();
         } else {
             this.yieldNotWarp();
@@ -904,18 +900,26 @@ class JSGenerator {
 
     safeConstantInput (value) {
         if (typeof value === 'string') {
-            if (this.isNameOfCostume(value)) {
+            if (this.isNameOfCostumeOrSound(value)) {
                 return new SafeConstantInput(value);
             }
         }
         return new ConstantInput(value);
     }
 
-    isNameOfCostume (stringValue) {
+    isNameOfCostumeOrSound (stringValue) {
         for (const target of this.target.runtime.targets) {
             if (target.isOriginal) {
-                if (target.getCostumeIndexByName(stringValue) !== -1) {
-                    return true;
+                const sprite = target.sprite;
+                for (const costume of sprite.costumes) {
+                    if (costume.name === stringValue) {
+                        return true;
+                    }
+                }
+                for (const sound of sprite.sounds) {
+                    if (sound.name === stringValue) {
+                        return true;
+                    }
                 }
             }
         }
@@ -947,6 +951,22 @@ class JSGenerator {
         return result;
     }
 
+    getScriptFactoryName () {
+        return factoryNameVariablePool.next();
+    }
+
+    getScriptName (yields) {
+        let name = yields ? generatorNameVariablePool.next() : functionNameVariablePool.next();
+        if (this.isProcedure) {
+            const simplifiedProcedureCode = this.script.procedureCode
+                .replace(/%[\w]/g, '') // remove arguments
+                .replace(/[^a-zA-Z0-9]/g, '_') // remove unsafe
+                .substring(0, 20); // keep length reasonable
+            name += `_${simplifiedProcedureCode}`;
+        }
+        return name;
+    }
+
     /**
      * Generate the JS to pass into eval() based on the current state of the compiler.
      * @returns {string} JS to pass into eval()
@@ -955,7 +975,7 @@ class JSGenerator {
         let script = '';
 
         // Setup the factory
-        script += `(function ${factoryNameVariablePool.next()}(target) { `;
+        script += `(function ${this.getScriptFactoryName()}(target) { `;
         script += 'const runtime = target.runtime; ';
         script += 'const stage = runtime.getTargetForStage();\n';
         for (const varValue of Object.keys(this._setupVariables)) {
@@ -966,11 +986,12 @@ class JSGenerator {
         // Generated script
         script += 'return ';
         if (this.script.yields) {
-            script += `function* ${generatorNameVariablePool.next()} `;
+            script += `function* `;
         } else {
-            script += `function ${functionNameVariablePool.next()} `;
+            script += `function `;
         }
-        script += '(';
+        script += this.getScriptName(this.script.yields);
+        script += ' (';
         if (this.script.arguments.length) {
             const args = [];
             for (let i = 0; i < this.script.arguments.length; i++) {

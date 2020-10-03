@@ -395,6 +395,8 @@ class Runtime extends EventEmitter {
          */
         this.removeCloudVariable = this._initializeRemoveCloudVariable(newCloudDataManager);
 
+        this._stageTarget = null;
+
         /**
          * The number of frames that have been stepped.
          * @type {number}
@@ -403,7 +405,7 @@ class Runtime extends EventEmitter {
 
         this.compilerOptions = {
             enabled: true,
-            loopStuckChecking: false
+            warpTimer: false
         };
     }
 
@@ -497,19 +499,11 @@ class Runtime extends EventEmitter {
     }
 
     /**
-     * Event name for enabling the compiler.
+     * Event name for compiler options changing.
      * @const {string}
      */
-    static get COMPILER_ENABLED () {
-        return 'COMPILER_ENABLED';
-    }
-
-    /**
-     * Event name for disabling the compiler.
-     * @const {string}
-     */
-    static get COMPILER_DISABLED () {
-        return 'COMPILER_DISABLED';
+    static get COMPILER_OPTIONS_CHANGED () {
+        return 'COMPILER_OPTIONS_CHANGED';
     }
 
     /**
@@ -1945,6 +1939,9 @@ class Runtime extends EventEmitter {
     addTarget (target) {
         this.targets.push(target);
         this.executableTargets.push(target);
+        if (target.isStage && !this._stageTarget) {
+            this._stageTarget = target;
+        }
     }
 
     /**
@@ -2013,6 +2010,9 @@ class Runtime extends EventEmitter {
             // Remove from list of targets.
             return false;
         });
+        if (this._stageTarget === disposingTarget) {
+            this._stageTarget = null;
+        }
     }
 
     /**
@@ -2220,26 +2220,15 @@ class Runtime extends EventEmitter {
     }
 
     /**
-     * tw: Set whether the compiler is enabled.
-     * This does not affect already running threads.
-     * @param {boolean} compilerEnabled True iff the compiler is to be enabled.
+     * tw: Update compiler options
+     * @param {*} compilerOptions New options
      */
-    setCompilerEnabled (compilerEnabled) {
-        this.compilerOptions.enabled = compilerEnabled;
-        if (compilerEnabled) {
-            this.emit(Runtime.COMPILER_ENABLED);
-        } else {
-            this.emit(Runtime.COMPILER_DISABLED);
-        }
-    }
-    /**
-     * tw: Set whether stuck checking is enabled.
-     * @param {boolean} stuckChecking True iff stuck checking is to be enabled.
-     */
-    setLoopStuckChecking (stuckChecking) {
-        this.compilerOptions.loopStuckChecking = stuckChecking;
+    setCompilerOptions (compilerOptions) {
+        this.compilerOptions = Object.assign({}, this.compilerOptions, compilerOptions);
         this.resetAllCaches();
+        this.emit(Runtime.COMPILER_OPTIONS_CHANGED, this.compilerOptions);
     }
+
     /**
      * tw: Reset the cache of all block containers.
      */
@@ -2565,9 +2554,13 @@ class Runtime extends EventEmitter {
      * @return {?Target} The target, if found.
      */
     getTargetForStage () {
+        if (this._stageTarget) {
+            return this._stageTarget;
+        }
         for (let i = 0; i < this.targets.length; i++) {
             const target = this.targets[i];
             if (target.isStage) {
+                this._stageTarget = target;
                 return target;
             }
         }
