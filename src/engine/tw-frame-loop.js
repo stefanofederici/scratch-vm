@@ -1,20 +1,25 @@
 class FrameLoop {
     constructor () {
+        this.running = false;
+        this.stepTime = 1000;
+        this.callback = () => {};
         this._interval = null;
     }
 
     isRunning () {
-        return this._interval !== null;
+        return this.running;
     }
 
-    start (fn, stepTime) {
+    start (callback, stepTime) {
+        this.running = true;
         this.stepTime = stepTime;
-        this._interval = setInterval(fn, stepTime);
+        this.callback = callback;
+        this._interval = setInterval(this.callback, stepTime);
     }
 
     stop () {
+        this.running = false;
         clearInterval(this._interval);
-        this._interval = null;
     }
 }
 
