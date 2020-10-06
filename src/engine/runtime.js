@@ -30,6 +30,8 @@ const Video = require('../io/video');
 const StringUtil = require('../util/string-util');
 const uid = require('../util/uid');
 
+const FrameLoop = require('./tw-frame-loop');
+
 const defaultBlockPackages = {
     scratch3_control: require('../blocks/scratch3_control'),
     scratch3_event: require('../blocks/scratch3_event'),
@@ -296,12 +298,7 @@ class Runtime extends EventEmitter {
          */
         this.turboMode = false;
 
-        /**
-         * A reference to the current runtime stepping interval, set
-         * by a `setInterval`.
-         * @type {!number}
-         */
-        this._steppingInterval = null;
+        this.frameLoop = new FrameLoop();
 
         /**
          * Current length of a step.
@@ -2191,9 +2188,8 @@ class Runtime extends EventEmitter {
      */
     setFramerate (framerate) {
         this.framerate = framerate;
-        if (this._steppingInterval) {
-            clearInterval(this._steppingInterval);
-            this._steppingInterval = null;
+        if (this.frameLoop.isRunning()) {
+            this.frameLoop.stop();
             this.start();
         }
         this.emit(Runtime.FRAMERATE_CHANGED, framerate);
@@ -2644,11 +2640,11 @@ class Runtime extends EventEmitter {
      */
     start () {
         // Do not start if we are already running
-        if (this._steppingInterval) return;
+        if (this.frameLoop.isRunning()) return;
 
         const interval = 1000 / this.framerate;
         this.currentStepTime = interval;
-        this._steppingInterval = setInterval(() => {
+        this.frameLoop.start(() => {
             this._step();
         }, interval);
         this.emit(Runtime.RUNTIME_STARTED);
