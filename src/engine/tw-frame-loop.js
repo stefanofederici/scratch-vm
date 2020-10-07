@@ -28,6 +28,9 @@ class FrameLoop {
 
         if (this.timeToNextFrame <= 0) {
             this.timeToNextFrame += this.stepTime;
+            if (this.timeToNextFrame < -this.stepTime) {
+                this.timeToNextFrame = -this.stepTime;
+            }
             this.callback();
         }
     }
