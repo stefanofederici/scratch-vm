@@ -51,9 +51,13 @@ class FrameLoop {
 
     stop () {
         this.running = false;
-        clearInterval(this._interval);
-        if (this._nextAnimationFrame) {
+        if (this._interval !== null) {
+            clearInterval(this._interval);
+            this._interval = null;
+        }
+        if (this._nextAnimationFrame !== null) {
             cancelAnimationFrame(this._nextAnimationFrame);
+            this._interval = null;
         }
     }
 }
