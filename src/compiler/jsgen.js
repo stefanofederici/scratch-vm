@@ -46,6 +46,7 @@ const generatorNameVariablePool = new VariablePool('gen');
  * @property {() => string} asString
  * @property {() => string} asBoolean
  * @property {() => string} asUnknown
+ * @property {() => string} asSafe
  * @property {() => boolean} isAlwaysNumber
  * @property {() => boolean} isNeverNumber
  */
@@ -86,6 +87,10 @@ class TypedInput {
         return this.source;
     }
 
+    asSafe () {
+        return this.asUnknown();
+    }
+
     isAlwaysNumber () {
         return this.type === TYPE_NUMBER;
     }
@@ -99,8 +104,9 @@ class TypedInput {
  * @implements {Input}
  */
 class ConstantInput {
-    constructor (constantValue) {
+    constructor (constantValue, safe) {
         this.constantValue = constantValue;
+        this.safe = safe;
     }
 
     asNumber () {
@@ -138,28 +144,19 @@ class ConstantInput {
         return this.asString();
     }
 
+    asSafe () {
+        if (this.safe) {
+            return this.asUnknown();
+        }
+        return this.asString();
+    }
+
     isAlwaysNumber () {
         return !Number.isNaN(+this.constantValue);
     }
 
     isNeverNumber () {
         return Number.isNaN(+this.constantValue);
-    }
-}
-
-/**
- * SafeConstantInput is similar to ConstantInput, except that asUnknown() will always convert to String.
- * @implements {Input}
- */
-class SafeConstantInput extends ConstantInput {
-    asUnknown () {
-        // This input should never be automatically converted to something else.
-        return this.asString();
-    }
-
-    // Make sure that no blocks will wrongly convert this to number.
-    isAlwaysNumber () {
-        return false;
     }
 }
 
@@ -226,6 +223,10 @@ class VariableInput {
         return this.source;
     }
 
+    asSafe () {
+        return this.asUnknown();
+    }
+
     isAlwaysNumber () {
         if (this._value) {
             return this._value.isAlwaysNumber();
@@ -247,11 +248,29 @@ disableToString(ConstantInput.prototype.asNumber);
 disableToString(ConstantInput.prototype.asString);
 disableToString(ConstantInput.prototype.asBoolean);
 disableToString(ConstantInput.prototype.asUnknown);
+disableToString(ConstantInput.prototype.asSafe);
 disableToString(TypedInput.prototype);
 disableToString(TypedInput.prototype.asNumber);
 disableToString(TypedInput.prototype.asString);
 disableToString(TypedInput.prototype.asBoolean);
 disableToString(TypedInput.prototype.asUnknown);
+disableToString(TypedInput.prototype.asSafe);
+
+const getNamesOfCostumesAndSounds = runtime => {
+    const result = new Set();
+    for (const target of runtime.targets) {
+        if (target.isOriginal) {
+            const sprite = target.sprite;
+            for (const costume of sprite.costumes) {
+                result.add(costume.name);
+            }
+            for (const sound of sprite.sounds) {
+                result.add(sound.name);
+            }
+        }
+    }
+    return result;
+};
 
 class JSGenerator {
     constructor (script, ast, target) {
@@ -268,6 +287,8 @@ class JSGenerator {
         this.isWarp = script.isWarp;
         this.isProcedure = script.isProcedure;
         this.warpTimer = script.warpTimer;
+
+        this.namesOfCostumesAndSounds = getNamesOfCostumesAndSounds(target.runtime);
 
         this.localVariables = new VariablePool('a');
         this._setupVariablesPool = new VariablePool('b');
@@ -300,8 +321,13 @@ class JSGenerator {
             return new TypedInput(`listContents(${this.referenceVariable(node.list)})`, TYPE_STRING);
         case 'list.get': {
             const index = this.descendInput(node.index);
-            if (environment.supportsNullishCoalescing && index.isAlwaysNumber()) {
-                return new TypedInput(`(${this.referenceVariable(node.list)}.value[(${index.asNumber()} | 0) - 1] ?? "")`, TYPE_UNKNOWN);
+            if (environment.supportsNullishCoalescing) {
+                if (index.isAlwaysNumber()) {
+                    return new TypedInput(`(${this.referenceVariable(node.list)}.value[(${index.asNumber()} | 0) - 1] ?? "")`, TYPE_UNKNOWN);
+                }
+                if (index instanceof ConstantInput && index.constantValue === 'last') {
+                    return new TypedInput(`(${this.referenceVariable(node.list)}.value[${this.referenceVariable(node.list)}.value.length - 1] ?? "")`, TYPE_UNKNOWN);
+                }
             }
             return new TypedInput(`listGet(${this.referenceVariable(node.list)}.value, ${index.asUnknown()})`, TYPE_UNKNOWN);
         }
@@ -594,7 +620,7 @@ class JSGenerator {
 
         case 'list.add': {
             const list = this.referenceVariable(node.list);
-            this.source += `${list}.value.push(${this.descendInput(node.item).asUnknown()});\n`;
+            this.source += `${list}.value.push(${this.descendInput(node.item).asSafe()});\n`;
             this.source += `${list}._monitorUpToDate = false;\n`;
             break;
         }
@@ -628,15 +654,15 @@ class JSGenerator {
             const index = this.descendInput(node.index);
             const item = this.descendInput(node.item);
             if (index instanceof ConstantInput && +index.constantValue === 1) {
-                this.source += `${list}.value.unshift(${item.asUnknown()});\n`;
+                this.source += `${list}.value.unshift(${item.asSafe()});\n`;
                 this.source += `${list}._monitorUpToDate = false;\n`;
                 break;
             }
-            this.source += `listInsert(${list}, ${index.asUnknown()}, ${item.asUnknown()});\n`;
+            this.source += `listInsert(${list}, ${index.asUnknown()}, ${item.asSafe()});\n`;
             break;
         }
         case 'list.replace':
-            this.source += `listReplace(${this.referenceVariable(node.list)}, ${this.descendInput(node.index).asUnknown()}, ${this.descendInput(node.item).asUnknown()});\n`;
+            this.source += `listReplace(${this.referenceVariable(node.list)}, ${this.descendInput(node.index).asUnknown()}, ${this.descendInput(node.item).asSafe()});\n`;
             break;
         case 'list.show':
             this.source += `runtime.monitorBlocks.changeBlock({ id: "${sanitize(node.list.id)}", element: "checkbox", value: true }, runtime);\n`;
@@ -669,10 +695,10 @@ class JSGenerator {
             this.source += 'runtime.ext_scratch3_looks._renderBubble(target);\n';
             break;
         case 'looks.switchBackdrop':
-            this.source += `runtime.ext_scratch3_looks._setBackdrop(stage, ${this.descendInput(node.backdrop).asUnknown()});\n`;
+            this.source += `runtime.ext_scratch3_looks._setBackdrop(stage, ${this.descendInput(node.backdrop).asSafe()});\n`;
             break;
         case 'looks.switchCostume':
-            this.source += `runtime.ext_scratch3_looks._setCostume(target, ${this.descendInput(node.costume).asUnknown()});\n`;
+            this.source += `runtime.ext_scratch3_looks._setCostume(target, ${this.descendInput(node.costume).asSafe()});\n`;
             break;
 
         case 'motion.ifOnEdgeBounce':
@@ -786,7 +812,7 @@ class JSGenerator {
             const variable = this.descendVariable(node.variable);
             const value = this.descendInput(node.value);
             variable.setInput(value);
-            this.source += `${variable.source} = ${value.asUnknown()};\n`;
+            this.source += `${variable.source} = ${value.asSafe()};\n`;
             if (node.variable.isCloud) {
                 this.source += `ioQuery("cloud", "requestUpdateVariable", ["${sanitize(node.variable.name)}", ${variable.source}]);\n`;
             }
@@ -899,31 +925,8 @@ class JSGenerator {
     }
 
     safeConstantInput (value) {
-        if (typeof value === 'string') {
-            if (this.isNameOfCostumeOrSound(value)) {
-                return new SafeConstantInput(value);
-            }
-        }
-        return new ConstantInput(value);
-    }
-
-    isNameOfCostumeOrSound (stringValue) {
-        for (const target of this.target.runtime.targets) {
-            if (target.isOriginal) {
-                const sprite = target.sprite;
-                for (const costume of sprite.costumes) {
-                    if (costume.name === stringValue) {
-                        return true;
-                    }
-                }
-                for (const sound of sprite.sounds) {
-                    if (sound.name === stringValue) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
+        const unsafe = typeof value === 'string' && this.namesOfCostumesAndSounds.has(value);
+        return new ConstantInput(value, !unsafe);
     }
 
     /**
