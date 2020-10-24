@@ -45,6 +45,113 @@ const createVariableData = (scope, varObj) => ({
     isCloud: varObj.isCloud
 });
 
+const cachedNodes = {
+    'looks.backdropNumber': {
+        kind: 'looks.backdropNumber'
+    },
+    'looks.backdropName': {
+        kind: 'looks.backdropName'
+    },
+    'looks.costumeNumber': {
+        kind: 'looks.costumeNumber'
+    },
+    'looks.costumeName': {
+        kind: 'looks.costumeName'
+    },
+    'looks.size': {
+        kind: 'looks.size'
+    },
+    'motion.direction': {
+        kind: 'motion.direction'
+    },
+    'motion.x': {
+        kind: 'motion.x'
+    },
+    'motion.y': {
+        kind: 'motion.y'
+    },
+    'sensing.answer': {
+        kind: 'sensing.answer'
+    },
+    'sensing.daysSince2000': {
+        kind: 'sensing.daysSince2000'
+    },
+    'mouse.down': {
+        kind: 'mouse.down'
+    },
+    'mouse.x': {
+        kind: 'mouse.x'
+    },
+    'mouse.y': {
+        kind: 'mouse.y'
+    },
+    'timer.get': {
+        kind: 'timer.get'
+    },
+    'sensing.username': {
+        kind: 'sensing.username'
+    },
+    'control.deleteClone': {
+        kind: 'control.deleteClone'
+    },
+    'noop': {
+        kind: 'noop'
+    },
+    'control.stopAll': {
+        kind: 'control.stopAll'
+    },
+    'control.stopOthers': {
+        kind: 'control.stopOthers'
+    },
+    'control.stopScript': {
+        kind: 'control.stopScript'
+    },
+    'looks.clearEffects': {
+        kind: 'looks.clearEffects'
+    },
+    'looks.goToFront': {
+        kind: 'looks.goToFront'
+    },
+    'looks.goToBack': {
+        kind: 'looks.goToBack'
+    },
+    'looks.hide': {
+        kind: 'looks.hide'
+    },
+    'looks.show': {
+        kind: 'looks.show'
+    },
+    'motion.ifOnEdgeBounce': {
+        kind: 'motion.ifOnEdgeBounce'
+    },
+    'pen.clear': {
+        kind: 'pen.clear'
+    },
+    'pen.down': {
+        kind: 'pen.down'
+    },
+    'pen.up': {
+        kind: 'pen.up'
+    },
+    'pen.stamp': {
+        kind: 'pen.stamp'
+    },
+    'tw.debugger': {
+        kind: 'tw.debugger'
+    },
+    'timer.reset': {
+        kind: 'timer.reset'
+    },
+    'true': {
+        kind: 'constant',
+        value: true
+    },
+    'zero': {
+        kind: 'constant',
+        value: 0
+    }
+};
+
 class ScriptTreeGenerator {
     constructor (thread) {
         /** @private */
@@ -118,19 +225,13 @@ class ScriptTreeGenerator {
         const input = parentBlock.inputs[inputName];
         if (!input) {
             log.warn(`AST: ${parentBlock.opcode}: missing input ${inputName}`, parentBlock);
-            return {
-                kind: 'constant',
-                value: 0
-            };
+            return cachedNodes['zero'];
         }
         const inputId = input.block;
         const block = this.blocks.getBlock(inputId);
         if (!block) {
             log.warn(`AST: ${parentBlock.opcode}: could not find input ${inputName} with ID ${inputId}`);
-            return {
-                kind: 'constant',
-                value: 0
-            };
+            return cachedNodes['zero'];
         }
 
         switch (block.opcode) {
@@ -175,10 +276,7 @@ class ScriptTreeGenerator {
                 }
             }
             if (index === -1) {
-                return {
-                    kind: 'constant',
-                    value: 0
-                };
+                return cachedNodes['zero'];
             }
             return {
                 kind: 'args.stringNumber',
@@ -196,10 +294,7 @@ class ScriptTreeGenerator {
                         value: true
                     };
                 }
-                return {
-                    kind: 'constant',
-                    value: 0
-                };
+                return cachedNodes['zero'];
             }
             return {
                 kind: 'args.boolean',
@@ -255,13 +350,9 @@ class ScriptTreeGenerator {
 
         case 'looks_backdropnumbername':
             if (block.fields.NUMBER_NAME.value === 'number') {
-                return {
-                    kind: 'looks.backdropNumber'
-                };
+                return cachedNodes['looks.backdropNumber'];
             }
-            return {
-                kind: 'looks.backdropName'
-            };
+            return cachedNodes['looks.backdropName'];
         case 'looks_backdrops':
             return {
                 kind: 'constant',
@@ -274,22 +365,14 @@ class ScriptTreeGenerator {
             };
         case 'looks_costumenumbername':
             if (block.fields.NUMBER_NAME.value === 'number') {
-                return {
-                    kind: 'looks.costumeNumber'
-                };
+                return cachedNodes['looks.costumeNumber'];
             }
-            return {
-                kind: 'looks.costumeName'
-            };
+            return cachedNodes['looks.costumeName'];
         case 'looks_size':
-            return {
-                kind: 'looks.size'
-            };
+            return cachedNodes['looks.size'];
 
         case 'motion_direction':
-            return {
-                kind: 'motion.direction'
-            };
+            return cachedNodes['motion.direction'];
         case 'motion_glideto_menu':
             return {
                 kind: 'constant',
@@ -306,13 +389,9 @@ class ScriptTreeGenerator {
                 value: block.fields.TOWARDS.value
             };
         case 'motion_xposition':
-            return {
-                kind: 'motion.x'
-            };
+            return cachedNodes['motion.x'];
         case 'motion_yposition':
-            return {
-                kind: 'motion.y'
-            };
+            return cachedNodes['motion.y'];
 
         case 'music_menu_DRUM':
             return {
@@ -450,10 +529,7 @@ class ScriptTreeGenerator {
                 kind: 'op.10^',
                 value
             };
-            default: return {
-                kind: 'constant',
-                value: 0
-            };
+            default: return cachedNodes['zero'];
             }
         }
         case 'operator_mod':
@@ -564,9 +640,7 @@ class ScriptTreeGenerator {
             };
 
         case 'sensing_answer':
-            return {
-                kind: 'sensing.answer'
-            };
+            return cachedNodes['sensing.answer'];
         case 'sensing_coloristouchingcolor':
             return {
                 kind: 'sensing.colorTouchingColor',
@@ -579,9 +653,7 @@ class ScriptTreeGenerator {
                 property: block.fields.CURRENTMENU.value.toLowerCase()
             };
         case 'sensing_dayssince2000':
-            return {
-                kind: 'sensing.daysSince2000'
-            };
+            return cachedNodes['sensing.daysSince2000'];
         case 'sensing_distancetomenu':
             return {
                 kind: 'constant',
@@ -603,17 +675,11 @@ class ScriptTreeGenerator {
                 key: this.descendInput(block, 'KEY_OPTION')
             };
         case 'sensing_mousedown':
-            return {
-                kind: 'mouse.down'
-            };
+            return cachedNodes['mouse.down'];
         case 'sensing_mousex':
-            return {
-                kind: 'mouse.x'
-            };
+            return cachedNodes['mouse.x'];
         case 'sensing_mousey':
-            return {
-                kind: 'mouse.y'
-            };
+            return cachedNodes['mouse.y'];
         case 'sensing_of_object_menu':
             return {
                 kind: 'constant',
@@ -626,9 +692,7 @@ class ScriptTreeGenerator {
                 object: this.descendInput(block, 'OBJECT')
             };
         case 'sensing_timer':
-            return {
-                kind: 'timer.get'
-            };
+            return cachedNodes['timer.get'];
         case 'sensing_touchingcolor':
             return {
                 kind: 'sensing.touchingColor',
@@ -645,9 +709,7 @@ class ScriptTreeGenerator {
                 value: block.fields.TOUCHINGOBJECTMENU.value
             };
         case 'sensing_username':
-            return {
-                kind: 'sensing.username'
-            };
+            return cachedNodes['sensing.username'];
 
         case 'sound_sounds_menu':
             return {
@@ -713,17 +775,12 @@ class ScriptTreeGenerator {
             };
         case 'control_delete_this_clone':
             this.yields = true; // todo: remove
-            return {
-                kind: 'control.deleteClone'
-            };
+            return cachedNodes['control.deleteClone'];
         case 'control_forever':
             this.analyzeLoop();
             return {
                 kind: 'control.while',
-                condition: {
-                    kind: 'constant',
-                    value: true
-                },
+                condition: cachedNodes['true'],
                 do: this.descendSubstack(block, 'SUBSTACK')
             };
         case 'control_for_each':
@@ -769,21 +826,13 @@ class ScriptTreeGenerator {
             const level = block.fields.STOP_OPTION.value;
             if (level === 'all') {
                 this.yields = true; // todo: remove
-                return {
-                    kind: 'control.stopAll'
-                };
+                return cachedNodes['control.stopAll'];
             } else if (level === 'other scripts in sprite' || level === 'other scripts in stage') {
-                return {
-                    kind: 'control.stopOthers'
-                };
+                return cachedNodes['control.stopOthers'];
             } else if (level === 'this script') {
-                return {
-                    kind: 'control.stopScript'
-                };
+                return cachedNodes['control.stopScript'];
             }
-            return {
-                kind: 'noop'
-            };
+            return cachedNodes['noop'];
         }
         case 'control_wait':
             this.yields = true;
@@ -903,16 +952,12 @@ class ScriptTreeGenerator {
                 kind: 'looks.setSize',
                 size: {
                     kind: 'op.add',
-                    left: {
-                        kind: 'looks.size'
-                    },
+                    left: cachedNodes['looks.size'],
                     right: this.descendInput(block, 'CHANGE')
                 }
             };
         case 'looks_cleargraphiceffects':
-            return {
-                kind: 'looks.clearEffects'
-            };
+            return cachedNodes['looks.clearEffects'];
         case 'looks_goforwardbackwardlayers':
             if (block.fields.FORWARD_BACKWARD.value === 'forward') {
                 return {
@@ -926,26 +971,18 @@ class ScriptTreeGenerator {
             };
         case 'looks_gotofrontback':
             if (block.fields.FRONT_BACK.value === 'front') {
-                return {
-                    kind: 'looks.goToFront'
-                };
+                return cachedNodes['looks.goToFront'];
             }
-            return {
-                kind: 'looks.goToBack'
-            };
+            return cachedNodes['looks.goToBack'];
         case 'looks_hide':
-            return {
-                kind: 'looks.hide'
-            };
+            return cachedNodes['looks.hide'];
         case 'looks_setsizeto':
             return {
                 kind: 'looks.setSize',
                 size: this.descendInput(block, 'SIZE')
             };
         case 'looks_show':
-            return {
-                kind: 'looks.show'
-            };
+            return cachedNodes['looks.show'];
         case 'looks_switchbackdropto':
             return {
                 kind: 'looks.switchBackdrop',
@@ -962,26 +999,18 @@ class ScriptTreeGenerator {
                 kind: 'motion.setXY',
                 x: {
                     kind: 'op.add',
-                    left: {
-                        kind: 'motion.x'
-                    },
+                    left: cachedNodes['motion.x'],
                     right: this.descendInput(block, 'DX')
                 },
-                y: {
-                    kind: 'motion.y'
-                }
+                y: cachedNodes['motion.y']
             };
         case 'motion_changeyby':
             return {
                 kind: 'motion.setXY',
-                x: {
-                    kind: 'motion.x'
-                },
+                x: cachedNodes['motion.x'],
                 y: {
                     kind: 'op.add',
-                    left: {
-                        kind: 'motion.y'
-                    },
+                    left: cachedNodes['motion.y'],
                     right: this.descendInput(block, 'DY')
                 }
             };
@@ -992,9 +1021,7 @@ class ScriptTreeGenerator {
                 y: this.descendInput(block, 'Y')
             };
         case 'motion_ifonedgebounce':
-            return {
-                kind: 'motion.ifOnEdgeBounce'
-            };
+            return cachedNodes['motion.ifOnEdgeBounce'];
         case 'motion_movesteps':
             return {
                 kind: 'motion.step',
@@ -1014,16 +1041,12 @@ class ScriptTreeGenerator {
             return {
                 kind: 'motion.setXY',
                 x: this.descendInput(block, 'X'),
-                y: {
-                    kind: 'motion.y'
-                }
+                y: cachedNodes['motion.y']
             };
         case 'motion_sety':
             return {
                 kind: 'motion.setXY',
-                x: {
-                    kind: 'motion.x'
-                },
+                x: cachedNodes['motion.x'],
                 y: this.descendInput(block, 'Y')
             };
         case 'motion_turnleft':
@@ -1031,9 +1054,7 @@ class ScriptTreeGenerator {
                 kind: 'motion.setDirection',
                 direction: {
                     kind: 'op.subtract',
-                    left: {
-                        kind: 'motion.direction'
-                    },
+                    left: cachedNodes['motion.direction'],
                     right: this.descendInput(block, 'DEGREES')
                 }
             };
@@ -1042,17 +1063,13 @@ class ScriptTreeGenerator {
                 kind: 'motion.setDirection',
                 direction: {
                     kind: 'op.add',
-                    left: {
-                        kind: 'motion.direction'
-                    },
+                    left: cachedNodes['motion.direction'],
                     right: this.descendInput(block, 'DEGREES')
                 }
             };
 
         case 'pen_clear':
-            return {
-                kind: 'pen.clear'
-            };
+            return cachedNodes['pen.clear'];
         case 'pen_changePenColorParamBy':
             return {
                 kind: 'pen.changeParam',
@@ -1070,13 +1087,9 @@ class ScriptTreeGenerator {
                 shade: this.descendInput(block, 'SHADE')
             };
         case 'pen_penDown':
-            return {
-                kind: 'pen.down'
-            };
+            return cachedNodes['pen.down'];
         case 'pen_penUp':
-            return {
-                kind: 'pen.up'
-            };
+            return cachedNodes['pen.up'];
         case 'pen_setPenColorParamTo':
             return {
                 kind: 'pen.setParam',
@@ -1109,24 +1122,18 @@ class ScriptTreeGenerator {
                 size: this.descendInput(block, 'SIZE')
             };
         case 'pen_stamp':
-            return {
-                kind: 'pen.stamp'
-            };
+            return cachedNodes['pen.stamp'];
 
         case 'procedures_call': {
             // setting of yields will be handled later in the analysis phase
 
             const procedureCode = block.mutation.proccode;
             if (procedureCode === 'tw:debugger;') {
-                return {
-                    kind: 'tw.debugger'
-                };
+                return cachedNodes['tw.debugger'];
             }
             const paramNamesIdsAndDefaults = this.blocks.getProcedureParamNamesIdsAndDefaults(procedureCode);
             if (paramNamesIdsAndDefaults === null) {
-                return {
-                    kind: 'noop'
-                };
+                return cachedNodes['noop'];
             }
 
             const [paramNames, paramIds, paramDefaults] = paramNamesIdsAndDefaults;
@@ -1165,9 +1172,7 @@ class ScriptTreeGenerator {
         }
 
         case 'sensing_resettimer':
-            return {
-                kind: 'timer.reset'
-            };
+            return cachedNodes['timer.reset'];
 
         default:
             // It might be a block that uses the compatibility layer
