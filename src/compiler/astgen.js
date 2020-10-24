@@ -139,6 +139,9 @@ const cachedNodes = {
     'tw.debugger': {
         kind: 'tw.debugger'
     },
+    'tw.lastKeyPressed': {
+        kind: 'tw.lastKeyPressed'
+    },
     'timer.reset': {
         kind: 'timer.reset'
     },
@@ -270,9 +273,7 @@ class ScriptTreeGenerator {
             const index = this.procedureArguments.lastIndexOf(name);
             if (index === -1) {
                 if (name.toLowerCase() === 'last key pressed') {
-                    return {
-                        kind: 'tw.lastKeyPressed'
-                    };
+                    return cachedNodes['tw.lastKeyPressed'];
                 }
             }
             if (index === -1) {
