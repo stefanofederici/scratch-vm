@@ -5,6 +5,11 @@ const execute = require('./execute');
 const {disableToString} = require('./util');
 const environment = require('./environment');
 
+/**
+ * @fileoverview
+ * jsgen.js converts intermediate representations to plain JavaScript.
+ */
+
 /* eslint-disable max-len */
 
 const sanitize = string => {
@@ -113,7 +118,9 @@ class ConstantInput {
         // Compute at compilation time
         const numberValue = +this.constantValue;
         if (numberValue) {
-            return this.constantValue;
+            // It's important that we use the number's stringified value and not the constant value
+            // Using the constant value allows numbers such as "010" to be interpreted as 8 (or SyntaxError in strict mode) instead of 10.
+            return numberValue.toString();
         }
         return '0';
     }
@@ -272,10 +279,20 @@ const getNamesOfCostumesAndSounds = runtime => {
     return result;
 };
 
+const isSafeConstantForEqualsOptimization = input => {
+    const numberValue = +input.constantValue;
+    // Do not optimize 0
+    if (!numberValue) {
+        return false;
+    }
+    // Do not optimize numbers when the original form does not match
+    return numberValue.toString() === input.constantValue.toString();
+};
+
 class JSGenerator {
-    constructor (script, ast, target) {
+    constructor (script, ir, target) {
         this.script = script;
-        this.ast = ast;
+        this.ir = ir;
         this.target = target;
         this.source = '';
 
@@ -313,7 +330,7 @@ class JSGenerator {
             return this.safeConstantInput(node.value);
 
         case 'keyboard.pressed':
-            return new TypedInput(`ioQuery("keyboard", "getKeyIsDown", [${this.descendInput(node.key).asUnknown()}])`, TYPE_BOOLEAN);
+            return new TypedInput(`runtime.ioDevices.keyboard.getKeyIsDown(${this.descendInput(node.key).asUnknown()})`, TYPE_BOOLEAN);
 
         case 'list.contains':
             return new TypedInput(`listContains(${this.referenceVariable(node.list)}, ${this.descendInput(node.item).asUnknown()})`, TYPE_BOOLEAN);
@@ -355,21 +372,23 @@ class JSGenerator {
             return new TypedInput('target.y', TYPE_NUMBER);
 
         case 'mouse.down':
-            return new TypedInput('ioQuery("mouse", "getIsDown")', TYPE_BOOLEAN);
+            return new TypedInput('runtime.ioDevices.mouse.getIsDown()', TYPE_BOOLEAN);
         case 'mouse.x':
-            return new TypedInput('ioQuery("mouse", "getScratchX")', TYPE_NUMBER);
+            return new TypedInput('runtime.ioDevices.mouse.getScratchX()', TYPE_NUMBER);
         case 'mouse.y':
-            return new TypedInput('ioQuery("mouse", "getScratchY")', TYPE_NUMBER);
+            return new TypedInput('runtime.ioDevices.mouse.getScratchY()', TYPE_NUMBER);
 
         case 'op.abs':
             return new TypedInput(`Math.abs(${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER);
         case 'op.acos':
+            // Needs to be marked as NaN because Math.acos(1.0001) === NaN
             return new TypedInput(`((Math.acos(${this.descendInput(node.value).asNumber()}) * 180) / Math.PI)`, TYPE_NUMBER_NAN);
         case 'op.add':
             return new TypedInput(`(${this.descendInput(node.left).asNumber()} + ${this.descendInput(node.right).asNumber()})`, TYPE_NUMBER);
         case 'op.and':
             return new TypedInput(`(${this.descendInput(node.left).asBoolean()} && ${this.descendInput(node.right).asBoolean()})`, TYPE_BOOLEAN);
         case 'op.asin':
+            // Needs to be marked as NaN because Math.asin(1.0001) === NaN
             return new TypedInput(`((Math.asin(${this.descendInput(node.value).asNumber()}) * 180) / Math.PI)`, TYPE_NUMBER_NAN);
         case 'op.atan':
             return new TypedInput(`((Math.atan(${this.descendInput(node.value).asNumber()}) * 180) / Math.PI)`, TYPE_NUMBER);
@@ -380,6 +399,7 @@ class JSGenerator {
         case 'op.cos':
             return new TypedInput(`(Math.round(Math.cos((Math.PI * ${this.descendInput(node.value).asNumber()}) / 180) * 1e10) / 1e10)`, TYPE_NUMBER);
         case 'op.divide':
+            // Needs to be marked as NaN because 0 / 0 === NaN
             return new TypedInput(`(${this.descendInput(node.left).asNumber()} / ${this.descendInput(node.right).asNumber()})`, TYPE_NUMBER_NAN);
         case 'op.equals': {
             const left = this.descendInput(node.left);
@@ -392,6 +412,13 @@ class JSGenerator {
             const rightAlwaysNumber = right.isAlwaysNumber();
             // When both operands are known to be numbers, we can use ===
             if (leftAlwaysNumber && rightAlwaysNumber) {
+                return new TypedInput(`(${left.asNumber()} === ${right.asNumber()})`, TYPE_BOOLEAN);
+            }
+            // In certain conditions, we can use === when one of the operands is known to be a safe number.
+            if (leftAlwaysNumber && left instanceof ConstantInput && isSafeConstantForEqualsOptimization(left)) {
+                return new TypedInput(`(${left.asNumber()} === ${right.asNumber()})`, TYPE_BOOLEAN);
+            }
+            if (rightAlwaysNumber && right instanceof ConstantInput && isSafeConstantForEqualsOptimization(right)) {
                 return new TypedInput(`(${left.asNumber()} === ${right.asNumber()})`, TYPE_BOOLEAN);
             }
             // No compile-time optimizations possible - use fallback method.
@@ -436,13 +463,17 @@ class JSGenerator {
         case 'op.letterOf':
             return new TypedInput(`((${this.descendInput(node.string).asString()})[(${this.descendInput(node.letter).asNumber()} | 0) - 1] || "")`, TYPE_STRING);
         case 'op.ln':
-            return new TypedInput(`Math.log(${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER);
+            // Needs to be marked as NaN because Math.log(-1) == NaN
+            return new TypedInput(`Math.log(${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER_NAN);
         case 'op.log':
-            return new TypedInput(`(Math.log(${this.descendInput(node.value).asNumber()}) / Math.LN10)`, TYPE_NUMBER);
+            // Needs to be marked as NaN because Math.log(-1) == NaN
+            return new TypedInput(`(Math.log(${this.descendInput(node.value).asNumber()}) / Math.LN10)`, TYPE_NUMBER_NAN);
         case 'op.mod':
-            return new TypedInput(`mod(${this.descendInput(node.left).asNumber()}, ${this.descendInput(node.right).asNumber()})`, TYPE_NUMBER);
+            // Needs to be marked as NaN because mod(0, 0) (and others) == NaN
+            return new TypedInput(`mod(${this.descendInput(node.left).asNumber()}, ${this.descendInput(node.right).asNumber()})`, TYPE_NUMBER_NAN);
         case 'op.multiply':
-            return new TypedInput(`(${this.descendInput(node.left).asNumber()} * ${this.descendInput(node.right).asNumber()})`, TYPE_NUMBER);
+            // Needs to be marked as NaN because Infinity * 0 === NaN
+            return new TypedInput(`(${this.descendInput(node.left).asNumber()} * ${this.descendInput(node.right).asNumber()})`, TYPE_NUMBER_NAN);
         case 'op.not':
             return new TypedInput(`!${this.descendInput(node.operand).asBoolean()}`, TYPE_BOOLEAN);
         case 'op.or':
@@ -460,6 +491,7 @@ class JSGenerator {
         case 'op.sin':
             return new TypedInput(`(Math.round(Math.sin((Math.PI * ${this.descendInput(node.value).asNumber()}) / 180) * 1e10) / 1e10)`, TYPE_NUMBER);
         case 'op.sqrt':
+            // Needs to be marked as NaN because Math.sqrt(-1) === NaN
             return new TypedInput(`Math.sqrt(${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER_NAN);
         case 'op.subtract':
             return new TypedInput(`(${this.descendInput(node.left).asNumber()} - ${this.descendInput(node.right).asNumber()})`, TYPE_NUMBER);
@@ -502,13 +534,13 @@ class JSGenerator {
         case 'sensing.touchingColor':
             return new TypedInput(`target.isTouchingColor(colorToList(${this.descendInput(node.color).asUnknown()}))`, TYPE_BOOLEAN);
         case 'sensing.username':
-            return new TypedInput('ioQuery("userData", "getUsername")', TYPE_STRING);
+            return new TypedInput('runtime.ioDevices.userData.getUsername()', TYPE_STRING);
 
         case 'timer.get':
-            return new TypedInput('ioQuery("clock", "preciseProjectTimer")', TYPE_NUMBER);
+            return new TypedInput('runtime.ioDevices.clock.preciseProjectTimer()', TYPE_NUMBER);
 
         case 'tw.lastKeyPressed':
-            return new TypedInput('ioQuery("keyboard", "getLastKeyPressed")', TYPE_STRING);
+            return new TypedInput('runtime.ioDevices.keyboard.getLastKeyPressed()', TYPE_STRING);
 
         case 'var.get':
             return this.descendVariable(node.variable);
@@ -638,7 +670,7 @@ class JSGenerator {
                     this.source += `${list}._monitorUpToDate = false;\n`;
                     break;
                 }
-                // do not need optimization for all: that is done at the AST level
+                // do not need a special case for all as that is handled in IR generation (list.deleteAll)
             }
             this.source += `listDelete(${list}, ${index.asUnknown()});\n`;
             break;
@@ -673,6 +705,9 @@ class JSGenerator {
             break;
         case 'looks.clearEffects':
             this.source += 'target.clearEffects();\n';
+            break;
+        case 'looks.changeSize':
+            this.source += `target.setSize(target.size + ${this.descendInput(node.size).asNumber()});\n`;
             break;
         case 'looks.forwardLayers':
             this.source += `target.goForwardLayers(${this.descendInput(node.layers).asNumber()});\n`;
@@ -767,7 +802,7 @@ class JSGenerator {
         case 'procedures.call': {
             const procedureCode = node.code;
             // Do not generate any code for empty procedures.
-            const procedureData = this.ast.procedures[procedureCode];
+            const procedureData = this.ir.procedures[procedureCode];
             if (procedureData.stack === null) {
                 break;
             }
@@ -786,7 +821,7 @@ class JSGenerator {
             if (procedureData.arguments.length) {
                 const args = [];
                 for (const input of node.arguments) {
-                    args.push(this.descendInput(input).asUnknown());
+                    args.push(this.descendInput(input).asSafe());
                 }
                 this.source += args.join(',');
             }
@@ -798,7 +833,7 @@ class JSGenerator {
         }
 
         case 'timer.reset':
-            this.source += 'ioQuery("clock", "resetProjectTimer");\n';
+            this.source += 'runtime.ioDevices.clock.resetProjectTimer();\n';
             break;
 
         case 'tw.debugger':
@@ -814,7 +849,7 @@ class JSGenerator {
             variable.setInput(value);
             this.source += `${variable.source} = ${value.asSafe()};\n`;
             if (node.variable.isCloud) {
-                this.source += `ioQuery("cloud", "requestUpdateVariable", ["${sanitize(node.variable.name)}", ${variable.source}]);\n`;
+                this.source += `runtime.ioDevices.cloud.requestUpdateVariable("${sanitize(node.variable.name)}", ${variable.source});\n`;
             }
             break;
         }
@@ -913,6 +948,9 @@ class JSGenerator {
     }
 
     yielded () {
+        if (!this.script.yields) {
+            throw new Error('Script yielded but is not marked as yielding.');
+        }
         // Control may have been yielded to another script -- all bets are off.
         this.resetVariableInputs();
     }
@@ -941,7 +979,7 @@ class JSGenerator {
 
         for (const inputName of Object.keys(node.inputs)) {
             const input = node.inputs[inputName];
-            const compiledInput = this.descendInput(input).asUnknown();
+            const compiledInput = this.descendInput(input).asSafe();
             result += `"${sanitize(inputName)}":${compiledInput},`;
         }
         for (const fieldName of Object.keys(node.fields)) {
@@ -1027,8 +1065,7 @@ class JSGenerator {
         const factory = this.createScriptFactory();
         const fn = execute.scopedEval(factory);
 
-        const spriteName = this.target.sprite ? this.target.sprite.name : 'unnamed';
-        log.info(`JS: ${spriteName}: compiled ${this.script.procedureCode || 'script'}`, factory);
+        log.info(`JS: ${this.target.getName()}: compiled ${this.script.procedureCode || 'script'}`, factory);
 
         return fn;
     }

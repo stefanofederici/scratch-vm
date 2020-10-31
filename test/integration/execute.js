@@ -59,7 +59,7 @@ const whenThreadsComplete = (t, vm, timeLimit = 2000) => (
 const executeDir = path.resolve(__dirname, '../fixtures/execute');
 
 fs.readdirSync(executeDir)
-    .filter(uri => uri.endsWith('.sb2'))
+    .filter(uri => uri.endsWith('.sb2') || uri.endsWith('.sb3'))
     .forEach(uri => {
         const run = (t, enableCompiler) => {
             // Disable logging during this test.
@@ -111,6 +111,22 @@ fs.readdirSync(executeDir)
             vm.setTurboMode(false);
             vm.setCompilerOptions({enabled: enableCompiler});
 
+            if (enableCompiler) {
+                const originalPushThread = vm.runtime._pushThread;
+                // Detect when threads were unable to be compiled, which is a serious error.
+                vm.runtime._pushThread = function (id, target, opts) {
+                    const thread = originalPushThread.call(this, id, target, opts);
+                    if (thread.triedToCompile && !thread.isCompiled) {
+                        const error = target.blocks.getCachedCompileResult(id);
+                        // Errors about "edge-activated hats" are expected and should be ignored.
+                        if (!`${error.value}`.includes('edge-activated hat')) {
+                            throw new Error(`Script compile failed for ${id} in ${target.getName()} (${error})`);
+                        }
+                    }
+                    return thread;
+                };
+            }
+
             // Stop the runtime interval once the test is complete so the test
             // process may naturally exit.
             t.tearDown(() => {
@@ -143,6 +159,6 @@ fs.readdirSync(executeDir)
                     }
                 });
         };
-        test(uri, t => run(t, false));
+        test(`${uri} (interpreted)`, t => run(t, false));
         test(`${uri} (compiled)`, t => run(t, true));
     });

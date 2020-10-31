@@ -401,6 +401,10 @@ class Runtime extends EventEmitter {
         // scratch-gui will set this to 30
         this.framerate = 60;
 
+        this.runtimeOptions = {
+            maxClones: Runtime.MAX_CLONES
+        };
+
         this.compilerOptions = {
             enabled: true,
             warpTimer: false
@@ -478,6 +482,14 @@ class Runtime extends EventEmitter {
      */
     static get TURBO_MODE_OFF () {
         return 'TURBO_MODE_OFF';
+    }
+
+    /**
+     * Event name for compiler options changing.
+     * @const {string}
+     */
+    static get RUNTIME_OPTIONS_CHANGED () {
+        return 'RUNTIME_OPTIONS_CHANGED';
     }
 
     /**
@@ -737,6 +749,7 @@ class Runtime extends EventEmitter {
      * @const {number}
      */
     static get MAX_CLONES () {
+        // tw: clone limit is set per-runtime in runtimeOptions, this is only the initial value
         return 300;
     }
 
@@ -2134,7 +2147,10 @@ class Runtime extends EventEmitter {
                 }
                 this.profiler.start(rendererDrawProfilerId);
             }
-            this.renderer.draw();
+            // tw: do not draw if document is hidden
+            if (!document.hidden) {
+                this.renderer.draw();
+            }
             if (this.profiler !== null) {
                 this.profiler.stop();
             }
@@ -2198,7 +2214,8 @@ class Runtime extends EventEmitter {
      * @param {boolean} compatibilityModeOn True iff in compatibility mode.
      */
     setCompatibilityMode (compatibilityModeOn) {
-        // tw: "compatibility mode" is replaced with a generic framerate setter, but this method is kept for compatibility
+        // tw: "compatibility mode" is replaced with a generic framerate setter,
+        // but this method is kept for compatibility
         if (compatibilityModeOn) {
             this.setFramerate(30);
         } else {
@@ -2218,6 +2235,15 @@ class Runtime extends EventEmitter {
             this.start();
         }
         this.emit(Runtime.FRAMERATE_CHANGED, framerate);
+    }
+
+    /**
+     * tw: Update runtime options
+     * @param {*} runtimeOptions New options
+     */
+    setRuntimeOptions (runtimeOptions) {
+        this.runtimeOptions = Object.assign({}, this.runtimeOptions, runtimeOptions);
+        this.emit(Runtime.RUNTIME_OPTIONS_CHANGED, this.runtimeOptions);
     }
 
     /**
@@ -2526,10 +2552,10 @@ class Runtime extends EventEmitter {
 
     /**
      * Return whether there are clones available.
-     * @return {boolean} True until the number of clones hits Runtime.MAX_CLONES.
+     * @return {boolean} True until the number of clones hits runtimeOptions.maxClones
      */
     clonesAvailable () {
-        return this._cloneCounter < Runtime.MAX_CLONES;
+        return this._cloneCounter < this.runtimeOptions.maxClones;
     }
 
     /**
