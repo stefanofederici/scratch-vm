@@ -713,6 +713,14 @@ class Runtime extends EventEmitter {
     }
 
     /**
+     * Event name when the runtime tick loop has been stopped.
+     * @const {string}
+     */
+    static get RUNTIME_STOPPED () {
+        return 'RUNTIME_STOPPED';
+    }
+
+    /**
      * Event name when the runtime dispose has been called.
      * @const {string}
      */
@@ -1911,7 +1919,12 @@ class Runtime extends EventEmitter {
         });
 
         this.targets.map(this.disposeTarget, this);
-        this._monitorState = OrderedMap({});
+        // tw: when disposing runtime, explicitly emit a MONITORS_UPDATE instead of relying on implicit behavior of _step()
+        const emptyMonitorState = OrderedMap({});
+        if (!emptyMonitorState.equals(this._monitorState)) {
+            this._monitorState = emptyMonitorState;
+            this.emit(Runtime.MONITORS_UPDATE, this._monitorState);
+        }
         this.emit(Runtime.RUNTIME_DISPOSED);
         this.ioDevices.clock.resetProjectTimer();
         // @todo clear out extensions? turboMode? etc.
@@ -2714,6 +2727,19 @@ class Runtime extends EventEmitter {
             this._step();
         }, interval);
         this.emit(Runtime.RUNTIME_STARTED);
+    }
+
+    /**
+     * tw: Stop the tick loop
+     * Note: This only stops the loop. It will not stop any threads the next time the VM starts
+     */
+    stop () {
+        if (!this._steppingInterval) {
+            return;
+        }
+        clearInterval(this._steppingInterval);
+        this._steppingInterval = null;
+        this.emit(Runtime.RUNTIME_STOPPED);
     }
 
     /**
