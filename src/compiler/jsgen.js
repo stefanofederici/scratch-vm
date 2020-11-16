@@ -145,8 +145,12 @@ class ConstantInput {
             return this.constantValue;
         }
         const numberValue = +this.constantValue;
-        if (numberValue.toString() === this.constantValue) {
-            return this.constantValue;
+        if (!Number.isNaN(numberValue)) {
+            // JavaScript converts whitespace to 0. We do not want that.
+            if (numberValue === 0 && Cast.isWhiteSpace(this.constantValue)) {
+                return this.asString();
+            }
+            return numberValue.toString();
         }
         return this.asString();
     }
