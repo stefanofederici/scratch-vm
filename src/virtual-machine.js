@@ -356,7 +356,17 @@ class VirtualMachine extends EventEmitter {
                     if (typeof input !== 'string') input = new TextDecoder().decode(input);
                     input = require('./tw-extended-json')(input);
                     input = JSON.stringify(input);
+                    const originalReplaceString = String.prototype.replace;
+                    // eslint-disable-next-line no-extend-native
+                    String.prototype.replace = function (a, b) {
+                        if (`${a}` === '/\\\\b|\\\\u0008/g' && b === '') {
+                            return this;
+                        }
+                        return originalReplaceString.call(this, a, b);
+                    };
                     return validate(input, false, (error2, res2) => {
+                        // eslint-disable-next-line no-extend-native
+                        String.prototype.replace = originalReplaceString;
                         if (error2) return reject(error);
                         resolve(res2);
                     });
