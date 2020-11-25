@@ -509,6 +509,14 @@ class Runtime extends EventEmitter {
     }
 
     /**
+     * Event name for compiler errors.
+     * @const {string}
+     */
+    static get COMPILE_ERROR () {
+        return 'COMPILE_ERROR';
+    }
+
+    /**
      * Event name when the project is started (threads may not necessarily be
      * running).
      * @const {string}
@@ -1717,6 +1725,10 @@ class Runtime extends EventEmitter {
         }
         this.threads.push(thread);
         return thread;
+    }
+
+    emitCompileError (target, error) {
+        this.emit(Runtime.COMPILE_ERROR, target, error);
     }
 
     /**

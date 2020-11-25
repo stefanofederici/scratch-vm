@@ -166,6 +166,9 @@ class VirtualMachine extends EventEmitter {
         this.runtime.on(Runtime.FRAMERATE_CHANGED, framerate => {
             this.emit(Runtime.FRAMERATE_CHANGED, framerate);
         });
+        this.runtime.on(Runtime.COMPILE_ERROR, (target, error) => {
+            this.emit(Runtime.COMPILE_ERROR, target, error);
+        });
 
         this.extensionManager = new ExtensionManager(this.runtime);
 
@@ -346,7 +349,21 @@ class VirtualMachine extends EventEmitter {
             // The second argument of false below indicates to the validator that the
             // input should be parsed/validated as an entire project (and not a single sprite)
             validate(input, false, (error, res) => {
-                if (error) return reject(error);
+                if (error) {
+                    // tw: if parsing failed, but the result appears to be JSON,
+                    // try an alternative JSON parser that supports some non-standard literals.
+                    // This is a dirty hack to fix https://github.com/LLK/scratch-parser/issues/60
+                    if (input[0] !== '{' && input[0] !== '{'.charCodeAt(0)) {
+                        return reject(error);
+                    }
+                    if (typeof input !== 'string') input = new TextDecoder().decode(input);
+                    input = require('./tw-extended-json')(input);
+                    input = JSON.stringify(input);
+                    return validate(input, false, (error2, res2) => {
+                        if (error2) return reject(error);
+                        resolve(res2);
+                    });
+                }
                 resolve(res);
             });
         })

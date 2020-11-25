@@ -72,6 +72,15 @@ class Scratch3ProcedureBlocks {
     argumentReporterBoolean (args, util) {
         const value = util.getParam(args.VALUE);
         if (value === null) {
+            // tw: is compiled? and is turbowarp? should return true
+            // Yes, is compiled? is returning a technically incorrect value.
+            // This results in the least astonishment for users when they click on "is compiled?" on its own.
+            if (util.target.runtime.compilerOptions.enabled) {
+                const lowercaseValue = `${args.VALUE}`.toLowerCase();
+                if (lowercaseValue === 'is compiled?' || lowercaseValue === 'is turbowarp?') {
+                    return true;
+                }
+            }
             // When the parameter is not found in the most recent procedure
             // call, the default is always 0.
             return 0;

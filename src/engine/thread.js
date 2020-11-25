@@ -451,9 +451,10 @@ class Thread {
             try {
                 result = compile(this);
                 blocks.cacheCompileResult(topBlock, result);
-            } catch (e) {
-                log.error('cannot compile script', this.target.getName(), e);
-                blocks.cacheCompileError(topBlock, e);
+            } catch (error) {
+                log.error('cannot compile script', this.target.getName(), error);
+                blocks.cacheCompileError(topBlock, error);
+                this.target.runtime.emitCompileError(this.target, error);
                 return;
             }
         }
@@ -464,6 +465,12 @@ class Thread {
         }
 
         this.generator = result.startingFunction(this.target)();
+
+        if (!blocks.forceNoGlow) {
+            this.blockGlowInFrame = this.topBlock;
+            this.requestScriptGlowInFrame = true;
+        }
+
         this.isCompiled = true;
     }
 }

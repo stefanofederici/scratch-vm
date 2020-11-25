@@ -14,6 +14,7 @@ const stacked = [
     'looks_say',
     'looks_sayforsecs',
     'looks_seteffectto',
+    'looks_switchbackdroptoandwait',
     'looks_think',
     'looks_thinkforsecs',
     'motion_glidesecstoxy',
@@ -29,12 +30,10 @@ const stacked = [
     'sensing_askandwait',
     'sensing_setdragmode',
     'sound_changeeffectby',
-    'sound_changeeffectby',
     'sound_changevolumeby',
     'sound_cleareffects',
     'sound_play',
     'sound_playuntildone',
-    'sound_seteffectto',
     'sound_seteffectto',
     'sound_setvolumeto',
     'sound_stopallsounds',
@@ -46,6 +45,7 @@ const stacked = [
 ];
 
 const inputs = [
+    'control_get_counter',
     'music_getTempo',
     'sensing_loud',
     'sensing_loudness',
