@@ -11,6 +11,7 @@ class Mouse {
          * @type{!Runtime}
          */
         this.runtime = runtime;
+        this._useMovement = false;
         this._movementX = 0;
         this._movementY = 0;
     }
@@ -101,6 +102,9 @@ class Mouse {
                 this._activateClickHats(target);
             }
         }
+        if (typeof data.useMovement === 'boolean') {
+            this._useMovement = data.useMovement;
+        }
         if (typeof data.movementX === 'number' && typeof data.movementY === 'number') {
             this._movementX += 480 * ((data.movementX / data.canvasWidth) - 0.5);
             this._movementY += -360 * ((data.movementY / data.canvasHeight) - 0.5);
@@ -148,6 +152,9 @@ class Mouse {
     }
 
     flushMovement () {
+        if (!this._useMovement) {
+            return;
+        }
         this._clientX = this._movementX;
         this._clientY = this._movementY;
         this._scratchX = MathUtil.clamp(this._movementX, -240, 240);
