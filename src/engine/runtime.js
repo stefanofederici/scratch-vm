@@ -2113,6 +2113,7 @@ class Runtime extends EventEmitter {
      * inactive threads after each iteration.
      */
     _step () {
+        this.ioDevices.mouse.flushMovement();
         if (this.profiler !== null) {
             if (stepProfilerId === -1) {
                 stepProfilerId = this.profiler.idByName('Runtime._step');
