@@ -1,35 +1,15 @@
 const Cast = require('../util/cast');
 const Variable = require('../engine/variable');
 const log = require('../util/log');
+const {IntermediateScript, IntermediateRepresentation} = require('./intermediate');
+const compatBlocks = require('./compat-blocks');
 
 /**
- * @fileoverview
- * irgen.js generates intermediate representations for scripts.
+ * @fileoverview Generate intermediate representations from Scratch blocks.
  */
 
 const SCALAR_TYPE = '';
 const LIST_TYPE = 'list';
-
-const compatBlocks = require('./compat-blocks');
-
-/**
- * @typedef IntermediateRepresentation
- * @property {IntermediateScript} entry
- * @property {Object.<string, IntermediateScript>} procedures
- */
-
-/**
- * @typedef IntermediateScript
- * @property {null|Array} stack The nodes that comprise this script, or null if the script is empty.
- * @property {string} procedureCode The name of this procedure, or null if the script is not a procedure.
- * @property {boolean} isProcedure
- * @property {string[]} arguments
- * @property {boolean} isWarp
- * @property {boolean} yields
- * @property {boolean} warpTimer
- * @property {Array<string>} dependedProcedures The list of procedure codes that this tree directly depends on.
- * @property {*} cachedCompileResult
- */
 
 /**
  * @typedef {Object.<string, *>} Node
@@ -63,27 +43,10 @@ class ScriptTreeGenerator {
         this.stage = this.runtime.getTargetForStage();
 
         /**
-         * List of procedures that this script depends on.
+         * This script's intermediate representation.
          */
-        this.dependedProcedures = [];
-
-        /** @private */
-        this.isProcedure = false;
-        /** @private */
-        this.procedureCode = '';
-        /** @private */
-        this.isWarp = false;
-        /** @private */
-        this.yields = true;
-        /** @private */
-        this.warpTimer = this.target.runtime.compilerOptions.warpTimer;
-
-        /**
-         * The names of the arguments accepted by this script, in order.
-         * @type {string[]}
-         * @private
-         */
-        this.procedureArguments = [];
+        this.script = new IntermediateScript();
+        this.script.warpTimer = this.target.runtime.compilerOptions.warpTimer;
 
         /**
          * Cache of variable ID to variable data object.
@@ -94,9 +57,9 @@ class ScriptTreeGenerator {
     }
 
     setProcedureCode (procedureCode) {
-        this.procedureCode = procedureCode;
-        this.isProcedure = true;
-        this.yields = false;
+        this.script.procedureCode = procedureCode;
+        this.script.isProcedure = true;
+        this.script.yields = false;
 
         const paramNamesIdsAndDefaults = this.blocks.getProcedureParamNamesIdsAndDefaults(procedureCode);
         if (paramNamesIdsAndDefaults === null) {
@@ -104,15 +67,15 @@ class ScriptTreeGenerator {
         }
 
         const [paramNames, _paramIds, _paramDefaults] = paramNamesIdsAndDefaults;
-        this.procedureArguments = paramNames;
+        this.script.arguments = paramNames;
     }
 
     enableWarp () {
-        this.isWarp = true;
+        this.script.isWarp = true;
     }
 
     /**
-     * Descend into an input. (eg. "length of ( )")
+     * Descend into a child input of a block. (eg. the input STRING of "length of ( )")
      * @param {*} parentBlock The parent Scratch block that contains the input.
      * @param {string} inputName The name of the input to descend into.
      * @private
@@ -140,6 +103,12 @@ class ScriptTreeGenerator {
         return this.descendInput(block);
     }
 
+    /**
+     * Descend into an input. (eg. "length of ( )")
+     * @param {*} block The parent Scratch block input.
+     * @private
+     * @returns {Node} Compiled input node for this input.
+     */
     descendInput (block) {
         switch (block.opcode) {
         case 'colour_picker': {
@@ -174,7 +143,7 @@ class ScriptTreeGenerator {
         case 'argument_reporter_string_number': {
             const name = block.fields.VALUE.value;
             // lastIndexOf because multiple parameters with the same name will use the value of the last definition
-            const index = this.procedureArguments.lastIndexOf(name);
+            const index = this.script.arguments.lastIndexOf(name);
             if (index === -1) {
                 if (name.toLowerCase() === 'last key pressed') {
                     return {
@@ -196,7 +165,7 @@ class ScriptTreeGenerator {
         case 'argument_reporter_boolean': {
             // see argument_reporter_string_number above
             const name = block.fields.VALUE.value;
-            const index = this.procedureArguments.lastIndexOf(name);
+            const index = this.script.arguments.lastIndexOf(name);
             if (index === -1) {
                 if (name.toLowerCase() === 'is compiled?' || name.toLowerCase() === 'is turbowarp?') {
                     return {
@@ -491,6 +460,7 @@ class ScriptTreeGenerator {
             const from = this.descendInputOfBlock(block, 'FROM');
             const to = this.descendInputOfBlock(block, 'TO');
             // If both values are known at compile time, we can do some optimizations.
+            // TODO: move optimizations to jsgen?
             if (from.kind === 'constant' && to.kind === 'constant') {
                 const sFrom = from.value;
                 const sTo = to.value;
@@ -750,7 +720,7 @@ class ScriptTreeGenerator {
                 target: this.descendInputOfBlock(block, 'CLONE_OPTION')
             };
         case 'control_delete_this_clone':
-            this.yields = true; // todo: remove
+            this.script.yields = true;
             return {
                 kind: 'control.deleteClone'
             };
@@ -806,7 +776,7 @@ class ScriptTreeGenerator {
         case 'control_stop': {
             const level = block.fields.STOP_OPTION.value;
             if (level === 'all') {
-                this.yields = true; // todo: remove
+                this.script.yields = true;
                 return {
                     kind: 'control.stopAll'
                 };
@@ -824,13 +794,13 @@ class ScriptTreeGenerator {
             };
         }
         case 'control_wait':
-            this.yields = true;
+            this.script.yields = true;
             return {
                 kind: 'control.wait',
                 seconds: this.descendInputOfBlock(block, 'DURATION')
             };
         case 'control_wait_until':
-            this.yields = true;
+            this.script.yields = true;
             return {
                 kind: 'control.waitUntil',
                 condition: this.descendInputOfBlock(block, 'CONDITION')
@@ -930,7 +900,7 @@ class ScriptTreeGenerator {
                 broadcast: this.descendInputOfBlock(block, 'BROADCAST_INPUT')
             };
         case 'event_broadcastandwait':
-            this.yields = true;
+            this.script.yields = true;
             return {
                 kind: 'event.broadcastAndWait',
                 broadcast: this.descendInputOfBlock(block, 'BROADCAST_INPUT')
@@ -1163,21 +1133,20 @@ class ScriptTreeGenerator {
 
             const [_paramNames, paramIds, paramDefaults] = paramNamesIdsAndDefaults;
 
-            if (!this.dependedProcedures.includes(procedureCode)) {
-                this.dependedProcedures.push(procedureCode);
+            if (!this.script.dependedProcedures.includes(procedureCode)) {
+                this.script.dependedProcedures.push(procedureCode);
             }
 
-            // Non-warp recursion yields.
-            if (!this.isWarp) {
-                if (procedureCode === this.procedureCode) {
-                    this.yields = true;
+            // Non-warp direct recursion yields.
+            if (!this.script.isWarp) {
+                if (procedureCode === this.script.procedureCode) {
+                    this.script.yields = true;
                 }
             }
 
             const args = [];
             for (let i = 0; i < paramIds.length; i++) {
                 let value;
-                // todo: move this sort of existance checking somewhere else
                 if (block.inputs[paramIds[i]] && block.inputs[paramIds[i]].block) {
                     value = this.descendInputOfBlock(block, paramIds[i]);
                 } else {
@@ -1356,7 +1325,7 @@ class ScriptTreeGenerator {
      * @returns {Node} The parsed node.
      */
     descendCompatLayer (block) {
-        this.yields = true;
+        this.script.yields = true;
         const inputs = {};
         const fields = {};
         for (const name of Object.keys(block.inputs)) {
@@ -1374,8 +1343,8 @@ class ScriptTreeGenerator {
     }
 
     analyzeLoop () {
-        if (!this.isWarp || this.warpTimer) {
-            this.yields = true;
+        if (!this.script.isWarp || this.script.warpTimer) {
+            this.script.yields = true;
         }
     }
 
@@ -1400,7 +1369,7 @@ class ScriptTreeGenerator {
                 case 'nocompile':
                     throw new Error('Script explicitly disables compilation');
                 case 'stuck':
-                    this.warpTimer = true;
+                    this.script.warpTimer = true;
                     break;
                 }
             }
@@ -1412,29 +1381,16 @@ class ScriptTreeGenerator {
 
     /**
      * @param {string} topBlockId The ID of the top block of the script.
-     * @returns {IntermediateScript} A compiled tree.
+     * @returns {IntermediateScript}
      */
     generate (topBlockId) {
-        /** @type {IntermediateScript} */
-        const result = {
-            stack: null,
-            procedureCode: this.procedureCode,
-            isProcedure: this.isProcedure,
-            arguments: this.procedureArguments,
-            isWarp: this.isWarp,
-            dependedProcedures: this.dependedProcedures,
-            yields: this.yields, // will be updated later
-            warpTimer: this.warpTimer, // will be updated later
-            cachedCompileResult: null
-        };
-
         this.blocks.populateProcedureCache();
 
         const topBlock = this.blocks.getBlock(topBlockId);
         if (!topBlock) {
-            if (this.isProcedure) {
+            if (this.script.isProcedure) {
                 // Empty procedure
-                return result;
+                return this.script;
             }
             // Probably running from toolbox. This is not currently supported.
             throw new Error('Cannot find top block (running from toolbox?)');
@@ -1457,14 +1413,12 @@ class ScriptTreeGenerator {
 
         if (!entryBlock) {
             // This is an empty script.
-            return result;
+            return this.script;
         }
 
-        result.stack = this.walkStack(entryBlock);
-        result.yields = this.yields;
-        result.warpTimer = this.warpTimer;
+        this.script.stack = this.walkStack(entryBlock);
 
-        return result;
+        return this.script;
     }
 }
 
@@ -1500,7 +1454,7 @@ class IRGenerator {
     /**
      * @param {ScriptTreeGenerator} generator The generator to run.
      * @param {string} topBlockId The ID of the top block in the stack.
-     * @returns {IntermediateScript} Tree for this script.
+     * @returns {IntermediateScript} Intermediate script.
      */
     generateScriptTree (generator, topBlockId) {
         const result = generator.generate(topBlockId);
@@ -1509,11 +1463,11 @@ class IRGenerator {
     }
 
     /**
-     * Recursively analyze a script tree and its dependencies.
-     * @param {IntermediateScript} tree Root script tree.
+     * Recursively analyze a script and its dependencies.
+     * @param {IntermediateScript} script Intermediate script.
      */
-    analyzeScript (tree) {
-        for (const procedureCode of tree.dependedProcedures) {
+    analyzeScript (script) {
+        for (const procedureCode of script.dependedProcedures) {
             const procedureData = this.procedures[procedureCode];
 
             // Analyze newly found procedures.
@@ -1525,13 +1479,13 @@ class IRGenerator {
 
             // If a procedure used by a script may yield, the script itself may yield.
             if (procedureData.yields) {
-                tree.yields = true;
+                script.yields = true;
             }
         }
     }
 
     /**
-     * @returns {IntermediateRepresentation} Syntax tree.
+     * @returns {IntermediateRepresentation} Intermediate representation.
      */
     generate () {
         const entry = this.generateScriptTree(new ScriptTreeGenerator(this.thread), this.thread.topBlock);
@@ -1576,10 +1530,10 @@ class IRGenerator {
         // This will recursively analyze procedures as well.
         this.analyzeScript(entry);
 
-        return {
-            entry: entry,
-            procedures: this.procedures
-        };
+        const ir = new IntermediateRepresentation();
+        ir.entry = entry;
+        ir.procedures = this.procedures;
+        return ir;
     }
 }
 

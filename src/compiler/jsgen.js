@@ -1,22 +1,24 @@
 const log = require('../util/log');
 const Cast = require('../util/cast');
 const VariablePool = require('./variable-pool');
-const execute = require('./execute');
+const jsexecute = require('./jsexecute');
 const {disableToString} = require('./util');
+const {IntermediateScript, IntermediateRepresentation} = require('./intermediate');
 const environment = require('./environment');
 
 /**
- * @fileoverview
- * jsgen.js converts intermediate representations to plain JavaScript.
+ * @fileoverview Convert intermediate representations to JavaScript functions.
  */
 
 /* eslint-disable max-len */
+/* eslint-disable prefer-template */
 
 const sanitize = string => {
-    if (typeof string === 'string') {
-        return JSON.stringify(string).slice(1, -1);
+    if (typeof string !== 'string') {
+        log.warn(`sanitize got unexpected type: ${typeof string}`);
+        string = '' + string;
     }
-    throw new Error(`sanitize got unexpected type: ${typeof string}`);
+    return JSON.stringify(string).slice(1, -1);
 };
 
 const TYPE_NUMBER = 1;
@@ -290,6 +292,11 @@ const isSafeConstantForEqualsOptimization = input => {
 };
 
 class JSGenerator {
+    /**
+     * @param {IntermediateScript} script 
+     * @param {IntermediateRepresentation} ir 
+     * @param {Target} target 
+     */
     constructor (script, ir, target) {
         this.script = script;
         this.ir = ir;
@@ -321,7 +328,7 @@ class JSGenerator {
         case 'args.boolean':
             return new TypedInput(`toBoolean(p${node.index})`, TYPE_BOOLEAN);
         case 'args.stringNumber':
-            return new TypedInput(`p${node.index}`, TYPE_BOOLEAN);
+            return new TypedInput(`p${node.index}`, TYPE_UNKNOWN);
 
         case 'compat':
             return new TypedInput(`(${this.generateCompatibilityLayerCall(node)})`, TYPE_UNKNOWN);
@@ -1050,7 +1057,7 @@ class JSGenerator {
 
     /**
      * Compile this script.
-     * @returns {Function} The factory function for the tree.
+     * @returns {Function} The factory function for the script.
      */
     compile () {
         if (this.script.stack) {
@@ -1058,7 +1065,7 @@ class JSGenerator {
         }
 
         const factory = this.createScriptFactory();
-        const fn = execute.scopedEval(factory);
+        const fn = jsexecute.scopedEval(factory);
 
         log.info(`JS: ${this.target.getName()}: compiled ${this.script.procedureCode || 'script'}`, factory);
 
