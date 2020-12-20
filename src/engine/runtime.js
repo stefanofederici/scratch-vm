@@ -2733,11 +2733,10 @@ class Runtime extends EventEmitter {
      * Note: This only stops the loop. It will not stop any threads the next time the VM starts
      */
     stop () {
-        if (!this._steppingInterval) {
+        if (!this.frameLoop.isRunning()) {
             return;
         }
-        clearInterval(this._steppingInterval);
-        this._steppingInterval = null;
+        this.frameLoop.stop();
         this.emit(Runtime.RUNTIME_STOPPED);
     }
 
