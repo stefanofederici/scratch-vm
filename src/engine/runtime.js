@@ -390,6 +390,10 @@ class Runtime extends EventEmitter {
         // scratch-gui will set this to 30
         this.framerate = 60;
 
+        this.runtimeOptions = {
+            maxClones: Runtime.MAX_CLONES
+        };
+
         this.compilerOptions = {
             enabled: true,
             warpTimer: false
@@ -473,6 +477,14 @@ class Runtime extends EventEmitter {
      * Event name for compiler options changing.
      * @const {string}
      */
+    static get RUNTIME_OPTIONS_CHANGED () {
+        return 'RUNTIME_OPTIONS_CHANGED';
+    }
+
+    /**
+     * Event name for compiler options changing.
+     * @const {string}
+     */
     static get COMPILER_OPTIONS_CHANGED () {
         return 'COMPILER_OPTIONS_CHANGED';
     }
@@ -483,6 +495,14 @@ class Runtime extends EventEmitter {
      */
     static get FRAMERATE_CHANGED () {
         return 'FRAMERATE_CHANGED';
+    }
+
+    /**
+     * Event name for compiler errors.
+     * @const {string}
+     */
+    static get COMPILE_ERROR () {
+        return 'COMPILE_ERROR';
     }
 
     /**
@@ -619,6 +639,15 @@ class Runtime extends EventEmitter {
     static get PERIPHERAL_LIST_UPDATE () {
         return 'PERIPHERAL_LIST_UPDATE';
     }
+    
+    /**
+     * Event name for when the user picks a bluetooth device to connect to
+     * via Companion Device Manager (CDM)
+     * @const {string}
+     */
+    static get USER_PICKED_PERIPHERAL () {
+        return 'USER_PICKED_PERIPHERAL';
+    }
 
     /**
      * Event name for reporting that a peripheral has connected.
@@ -690,6 +719,14 @@ class Runtime extends EventEmitter {
     }
 
     /**
+     * Event name when the runtime tick loop has been stopped.
+     * @const {string}
+     */
+    static get RUNTIME_STOPPED () {
+        return 'RUNTIME_STOPPED';
+    }
+
+    /**
      * Event name when the runtime dispose has been called.
      * @const {string}
      */
@@ -726,6 +763,7 @@ class Runtime extends EventEmitter {
      * @const {number}
      */
     static get MAX_CLONES () {
+        // tw: clone limit is set per-runtime in runtimeOptions, this is only the initial value
         return 300;
     }
 
@@ -1678,6 +1716,10 @@ class Runtime extends EventEmitter {
         return thread;
     }
 
+    emitCompileError (target, error) {
+        this.emit(Runtime.COMPILE_ERROR, target, error);
+    }
+
     /**
      * Return whether a thread is currently active/running.
      * @param {?Thread} thread Thread object to check.
@@ -1887,7 +1929,12 @@ class Runtime extends EventEmitter {
         });
 
         this.targets.map(this.disposeTarget, this);
-        this._monitorState = OrderedMap({});
+        // tw: when disposing runtime, explicitly emit a MONITORS_UPDATE instead of relying on implicit behavior of _step()
+        const emptyMonitorState = OrderedMap({});
+        if (!emptyMonitorState.equals(this._monitorState)) {
+            this._monitorState = emptyMonitorState;
+            this.emit(Runtime.MONITORS_UPDATE, this._monitorState);
+        }
         this.emit(Runtime.RUNTIME_DISPOSED);
         this.ioDevices.clock.resetProjectTimer();
         // @todo clear out extensions? turboMode? etc.
@@ -2110,7 +2157,10 @@ class Runtime extends EventEmitter {
                 }
                 this.profiler.start(rendererDrawProfilerId);
             }
-            this.renderer.draw();
+            // tw: do not draw if document is hidden
+            if (!document.hidden) {
+                this.renderer.draw();
+            }
             if (this.profiler !== null) {
                 this.profiler.stop();
             }
@@ -2174,7 +2224,8 @@ class Runtime extends EventEmitter {
      * @param {boolean} compatibilityModeOn True iff in compatibility mode.
      */
     setCompatibilityMode (compatibilityModeOn) {
-        // tw: "compatibility mode" is replaced with a generic framerate setter, but this method is kept for compatibility
+        // tw: "compatibility mode" is replaced with a generic framerate setter,
+        // but this method is kept for compatibility
         if (compatibilityModeOn) {
             this.setFramerate(30);
         } else {
@@ -2187,12 +2238,24 @@ class Runtime extends EventEmitter {
      * @param {number} framerate Target frames per second
      */
     setFramerate (framerate) {
+        // Setting framerate to anything greater than this is
+        // unnecessary and tricks the sequencer into thinking it has almost no work time.
+        if (framerate > 1000) framerate = 1000;
         this.framerate = framerate;
         if (this.frameLoop.isRunning()) {
             this.frameLoop.stop();
             this.start();
         }
         this.emit(Runtime.FRAMERATE_CHANGED, framerate);
+    }
+
+    /**
+     * tw: Update runtime options
+     * @param {*} runtimeOptions New options
+     */
+    setRuntimeOptions (runtimeOptions) {
+        this.runtimeOptions = Object.assign({}, this.runtimeOptions, runtimeOptions);
+        this.emit(Runtime.RUNTIME_OPTIONS_CHANGED, this.runtimeOptions);
     }
 
     /**
@@ -2214,6 +2277,21 @@ class Runtime extends EventEmitter {
                 target.blocks.resetCache();
             }
         }
+    }
+
+    /**
+     * Eagerly (re)compile all scripts within this project.
+     */
+    precompile () {
+        this.allScriptsDo((topBlockId, target) => {
+            const topBlock = target.blocks.getBlock(topBlockId);
+            if (this.getIsHat(topBlock.opcode)) {
+                const thread = new Thread(topBlockId);
+                thread.target = target;
+                thread.blockContainer = target.blocks;
+                thread.tryCompile();
+            }
+        });
     }
 
     /**
@@ -2486,10 +2564,10 @@ class Runtime extends EventEmitter {
 
     /**
      * Return whether there are clones available.
-     * @return {boolean} True until the number of clones hits Runtime.MAX_CLONES.
+     * @return {boolean} True until the number of clones hits runtimeOptions.maxClones
      */
     clonesAvailable () {
-        return this._cloneCounter < Runtime.MAX_CLONES;
+        return this._cloneCounter < this.runtimeOptions.maxClones;
     }
 
     /**
@@ -2648,6 +2726,19 @@ class Runtime extends EventEmitter {
             this._step();
         }, interval);
         this.emit(Runtime.RUNTIME_STARTED);
+    }
+
+    /**
+     * tw: Stop the tick loop
+     * Note: This only stops the loop. It will not stop any threads the next time the VM starts
+     */
+    stop () {
+        if (!this._steppingInterval) {
+            return;
+        }
+        clearInterval(this._steppingInterval);
+        this._steppingInterval = null;
+        this.emit(Runtime.RUNTIME_STOPPED);
     }
 
     /**

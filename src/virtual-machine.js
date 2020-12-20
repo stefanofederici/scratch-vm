@@ -127,6 +127,9 @@ class VirtualMachine extends EventEmitter {
         this.runtime.on(Runtime.PERIPHERAL_LIST_UPDATE, info => {
             this.emit(Runtime.PERIPHERAL_LIST_UPDATE, info);
         });
+        this.runtime.on(Runtime.USER_PICKED_PERIPHERAL, info => {
+            this.emit(Runtime.USER_PICKED_PERIPHERAL, info);
+        });
         this.runtime.on(Runtime.PERIPHERAL_CONNECTED, () =>
             this.emit(Runtime.PERIPHERAL_CONNECTED)
         );
@@ -148,14 +151,23 @@ class VirtualMachine extends EventEmitter {
         this.runtime.on(Runtime.RUNTIME_STARTED, () => {
             this.emit(Runtime.RUNTIME_STARTED);
         });
+        this.runtime.on(Runtime.RUNTIME_STOPPED, () => {
+            this.emit(Runtime.RUNTIME_STOPPED);
+        });
         this.runtime.on(Runtime.HAS_CLOUD_DATA_UPDATE, hasCloudData => {
             this.emit(Runtime.HAS_CLOUD_DATA_UPDATE, hasCloudData);
+        });
+        this.runtime.on(Runtime.RUNTIME_OPTIONS_CHANGED, runtimeOptions => {
+            this.emit(Runtime.RUNTIME_OPTIONS_CHANGED, runtimeOptions);
         });
         this.runtime.on(Runtime.COMPILER_OPTIONS_CHANGED, compilerOptions => {
             this.emit(Runtime.COMPILER_OPTIONS_CHANGED, compilerOptions);
         });
         this.runtime.on(Runtime.FRAMERATE_CHANGED, framerate => {
             this.emit(Runtime.FRAMERATE_CHANGED, framerate);
+        });
+        this.runtime.on(Runtime.COMPILE_ERROR, (target, error) => {
+            this.emit(Runtime.COMPILE_ERROR, target, error);
         });
 
         this.extensionManager = new ExtensionManager(this.runtime);
@@ -176,6 +188,14 @@ class VirtualMachine extends EventEmitter {
      */
     start () {
         this.runtime.start();
+    }
+
+    /**
+     * tw: Stop running the VM
+     * Note: This only stops the loop. It will not stop any threads the next time the VM starts
+     */
+    stop () {
+        this.runtime.stop();
     }
 
     /**
@@ -210,6 +230,10 @@ class VirtualMachine extends EventEmitter {
 
     setFramerate (framerate) {
         this.runtime.setFramerate(framerate);
+    }
+
+    setRuntimeOptions (runtimeOptions) {
+        this.runtime.setRuntimeOptions(runtimeOptions);
     }
 
     setCompilerOptions (compilerOptions) {
@@ -325,7 +349,21 @@ class VirtualMachine extends EventEmitter {
             // The second argument of false below indicates to the validator that the
             // input should be parsed/validated as an entire project (and not a single sprite)
             validate(input, false, (error, res) => {
-                if (error) return reject(error);
+                if (error) {
+                    // tw: if parsing failed, but the result appears to be JSON,
+                    // try an alternative JSON parser that supports some non-standard literals.
+                    // This is a dirty hack to fix https://github.com/LLK/scratch-parser/issues/60
+                    if (input[0] !== '{' && input[0] !== '{'.charCodeAt(0)) {
+                        return reject(error);
+                    }
+                    if (typeof input !== 'string') input = new TextDecoder().decode(input);
+                    input = require('./tw-extended-json')(input);
+                    input = JSON.stringify(input);
+                    return validate(input, false, (error2, res2) => {
+                        if (error2) return reject(error);
+                        resolve(res2);
+                    });
+                }
                 resolve(res);
             });
         })

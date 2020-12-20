@@ -426,7 +426,7 @@ class Thread {
     /**
      * Attempt to compile this thread.
      */
-    tryCompile() {
+    tryCompile () {
         const blocks = this.blockContainer;
         if (!blocks) {
             return;
@@ -438,22 +438,23 @@ class Thread {
         this.triedToCompile = true;
 
         const topBlock = this.topBlock;
-        const cachedResult = blocks.getCompiledScript(topBlock);
-        if (cachedResult === null) {
-            // null means an error was cached, cannot be compiled
+        const cachedResult = blocks.getCachedCompileResult(topBlock);
+        // If there is a cached result that indicates, error, do not attempt to compile.
+        if (cachedResult && !cachedResult.success) {
             return;
         }
 
         let result;
         if (cachedResult) {
-            result = cachedResult;
+            result = cachedResult.value;
         } else {
             try {
                 result = compile(this);
-                blocks.setCompiledScript(topBlock, result);
-            } catch (e) {
-                log.error('cannot compile script', this.target.getName(), e);
-                blocks.setCompiledScript(topBlock, null);
+                blocks.cacheCompileResult(topBlock, result);
+            } catch (error) {
+                log.error('cannot compile script', this.target.getName(), error);
+                blocks.cacheCompileError(topBlock, error);
+                this.target.runtime.emitCompileError(this.target, error);
                 return;
             }
         }
@@ -464,6 +465,12 @@ class Thread {
         }
 
         this.generator = result.startingFunction(this.target)();
+
+        if (!blocks.forceNoGlow) {
+            this.blockGlowInFrame = this.topBlock;
+            this.requestScriptGlowInFrame = true;
+        }
+
         this.isCompiled = true;
     }
 }

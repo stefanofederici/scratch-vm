@@ -84,16 +84,21 @@ class Blocks {
             scripts: {},
 
             /**
-             * A cache of top block (usually hat, but not always) opcodes to compiled scripts.
+             * tw: A cache of top block (usually hat, but not always) opcodes to compiled scripts.
              * @type {object.<string, object>}
              */
             compiledScripts: {},
             
             /**
-             * A cache of procedure code opcodes to a parsed AST
+             * tw: A cache of procedure code opcodes to a parsed intermediate representation
              * @type {object.<string, object>}
              */
-            compiledProcedures: {}
+            compiledProcedures: {},
+
+            /**
+             * tw: Whether populateProcedureCache has been run
+             */
+            proceduresPopulated: false
         };
 
         /**
@@ -109,24 +114,39 @@ class Blocks {
     }
 
     /**
-     * Get the cached compiled script of a block.
-     * @param {string} blockId ID of the block
-     * @returns null if cannot be compiled, undefined if no entry, otherwise the result
+     * Get the cached compilation result of a block.
+     * @param {string} blockId ID of the top block.
+     * @returns {{success: boolean; value: any}|null} Cached success or error, or null if there is no cached value.
      */
-    getCompiledScript(blockId) {
+    getCachedCompileResult (blockId) {
         if (this._cache.compiledScripts.hasOwnProperty(blockId)) {
             return this._cache.compiledScripts[blockId];
         }
-        return undefined;
+        return null;
     }
 
     /**
-     * Set the cached compiled script of a block.
-     * @param {string} blockId ID of the top block
-     * @param {*} value The value to store, null if error, otherwise the result
+     * Set the cached compilation result of a script.
+     * @param {string} blockId ID of the top block.
+     * @param {*} value The compilation result to store.
      */
-    setCompiledScript(blockId, value) {
-        this._cache.compiledScripts[blockId] = value;
+    cacheCompileResult (blockId, value) {
+        this._cache.compiledScripts[blockId] = {
+            success: true,
+            value: value
+        };
+    }
+
+    /**
+     * Set the cached error of a script.
+     * @param {string} blockId ID of the top block.
+     * @param {*} error The error to store.
+     */
+    cacheCompileError (blockId, error) {
+        this._cache.compiledScripts[blockId] = {
+            success: false,
+            value: error
+        };
     }
 
     /**
@@ -267,6 +287,7 @@ class Blocks {
             if (!this._blocks.hasOwnProperty(id)) continue;
             const block = this._blocks[id];
             if (block.opcode === 'procedures_definition') {
+                // tw: make sure that populateProcedureCache is kept up to date with this method
                 const internal = this._getCustomBlockInternal(block);
                 if (internal && internal.mutation.proccode === name) {
                     this._cache.procedureDefinitions[name] = id; // The outer define block id
@@ -304,6 +325,7 @@ class Blocks {
             const block = this._blocks[id];
             if (block.opcode === 'procedures_prototype' &&
                 block.mutation.proccode === name) {
+                // tw: make sure that populateProcedureCache is kept up to date with this method
                 const names = JSON.parse(block.mutation.argumentnames);
                 const ids = JSON.parse(block.mutation.argumentids);
                 const defaults = JSON.parse(block.mutation.argumentdefaults);
@@ -315,6 +337,43 @@ class Blocks {
 
         this._cache.procedureParamNames[name] = null;
         return null;
+    }
+
+    /**
+     * tw: Setup the procedureParamNames and procedureDefinitions caches all at once.
+     * This makes subsequent calls to these methods faster.
+     */
+    populateProcedureCache () {
+        if (this._cache.proceduresPopulated) {
+            return;
+        }
+        for (const id in this._blocks) {
+            if (!this._blocks.hasOwnProperty(id)) continue;
+            const block = this._blocks[id];
+
+            if (block.opcode === 'procedures_prototype') {
+                const name = block.mutation.proccode;
+                if (!this._cache.procedureParamNames[name]) {
+                    const names = JSON.parse(block.mutation.argumentnames);
+                    const ids = JSON.parse(block.mutation.argumentids);
+                    const defaults = JSON.parse(block.mutation.argumentdefaults);
+                    this._cache.procedureParamNames[name] = [names, ids, defaults];
+                }
+                continue;
+            }
+
+            if (block.opcode === 'procedures_definition') {
+                const internal = this._getCustomBlockInternal(block);
+                if (internal) {
+                    const name = internal.mutation.proccode;
+                    if (!this._cache.procedureDefinitions[name]) {
+                        this._cache.procedureDefinitions[name] = id;
+                    }
+                    continue;
+                }
+            }
+        }
+        this._cache.proceduresPopulated = true;
     }
 
     duplicate () {
@@ -557,6 +616,7 @@ class Blocks {
         this._cache.scripts = {};
         this._cache.compiledScripts = {};
         this._cache.compiledProcedures = {};
+        this._cache.proceduresPopulated = false;
     }
 
     /**

@@ -385,6 +385,10 @@ class RenderedTarget extends Target {
                 this.emitFast(RenderedTarget.EVENT_TARGET_VISUAL_CHANGE, this);
                 this.runtime.requestRedraw();
             }
+        } else {
+            // tw: setSize should update size even without a renderer
+            // needed by tw-change-size-does-not-use-rounded-size.sb3 test
+            this.size = size;
         }
         this.runtime.requestTargetsUpdate(this);
     }
@@ -433,7 +437,9 @@ class RenderedTarget extends Target {
     setCostume (index) {
         // Keep the costume index within possible values.
         index = Math.round(index);
-        if ([Infinity, -Infinity, NaN].includes(index)) index = 0;
+        if (index === Infinity || index === -Infinity || !index) {
+            index = 0;
+        }
 
         this.currentCostume = MathUtil.wrapClamp(
             index, 0, this.sprite.costumes.length - 1
@@ -594,8 +600,9 @@ class RenderedTarget extends Target {
      * @return {number} Index of the named costume, or -1 if not present.
      */
     getCostumeIndexByName (costumeName) {
-        for (let i = 0; i < this.sprite.costumes.length; i++) {
-            if (this.getCostumes()[i].name === costumeName) {
+        const costumes = this.getCostumes();
+        for (let i = 0; i < costumes.length; i++) {
+            if (costumes[i].name === costumeName) {
                 return i;
             }
         }
