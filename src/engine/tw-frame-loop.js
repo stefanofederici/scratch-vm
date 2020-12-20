@@ -39,7 +39,6 @@ class FrameLoop {
         this.running = true;
         this.stepTime = stepTime;
         this.callback = callback;
-        // requestAnimationFrame is not available in Node
         if (typeof requestAnimationFrame === 'undefined') {
             this._interval = setInterval(callback, stepTime);
         } else {
@@ -57,7 +56,7 @@ class FrameLoop {
         }
         if (this._nextAnimationFrame !== null) {
             cancelAnimationFrame(this._nextAnimationFrame);
-            this._interval = null;
+            this._nextAnimationFrame = null;
         }
     }
 }
