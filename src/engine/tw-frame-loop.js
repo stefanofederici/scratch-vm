@@ -17,22 +17,7 @@ class FrameLoop {
     handleAnimationFrame (time) {
         this._nextAnimationFrame = requestAnimationFrame(this.handleAnimationFrame);
 
-        if (this.lastFrameTime === null) {
-            this.lastFrameTime = time;
-        }
-
-        const deltaTime = time - this.lastFrameTime;
-        this.lastFrameTime = time;
-
-        this.timeToNextFrame -= deltaTime;
-
-        if (this.timeToNextFrame <= 0) {
-            this.timeToNextFrame += this.stepTime;
-            if (this.timeToNextFrame < -this.stepTime) {
-                this.timeToNextFrame = -this.stepTime;
-            }
-            this.callback();
-        }
+        this.callback();
     }
 
     start (callback, stepTime) {
