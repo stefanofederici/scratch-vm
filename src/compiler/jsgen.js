@@ -1,13 +1,13 @@
 const log = require('../util/log');
 const Cast = require('../util/cast');
 const VariablePool = require('./variable-pool');
-const execute = require('./execute');
+const jsexecute = require('./jsexecute');
 const {disableToString} = require('./util');
+const {IntermediateScript, IntermediateRepresentation} = require('./intermediate');
 const environment = require('./environment');
 
 /**
- * @fileoverview
- * jsgen.js converts intermediate representations to plain JavaScript.
+ * @fileoverview Convert intermediate representations to JavaScript functions.
  */
 
 /* eslint-disable max-len */
@@ -292,6 +292,11 @@ const isSafeConstantForEqualsOptimization = input => {
 };
 
 class JSGenerator {
+    /**
+     * @param {IntermediateScript} script 
+     * @param {IntermediateRepresentation} ir 
+     * @param {Target} target 
+     */
     constructor (script, ir, target) {
         this.script = script;
         this.ir = ir;
@@ -323,7 +328,7 @@ class JSGenerator {
         case 'args.boolean':
             return new TypedInput(`toBoolean(p${node.index})`, TYPE_BOOLEAN);
         case 'args.stringNumber':
-            return new TypedInput(`p${node.index}`, TYPE_BOOLEAN);
+            return new TypedInput(`p${node.index}`, TYPE_UNKNOWN);
 
         case 'compat':
             return new TypedInput(`(${this.generateCompatibilityLayerCall(node)})`, TYPE_UNKNOWN);
@@ -720,6 +725,12 @@ class JSGenerator {
             this.source += 'target.setVisible(false);\n';
             this.source += 'runtime.ext_scratch3_looks._renderBubble(target);\n';
             break;
+        case 'looks.nextBackdrop':
+            this.source += 'stage.setCostume(stage.currentCostume + 1);\n';
+            break;
+        case 'looks.nextCostume':
+            this.source += 'target.setCostume(target.currentCostume + 1);\n';
+            break;
         case 'looks.setSize':
             this.source += `target.setSize(${this.descendInput(node.size).asNumber()});\n`;
             break;
@@ -1055,7 +1066,7 @@ class JSGenerator {
 
     /**
      * Compile this script.
-     * @returns {Function} The factory function for the tree.
+     * @returns {Function} The factory function for the script.
      */
     compile () {
         if (this.script.stack) {
@@ -1063,7 +1074,7 @@ class JSGenerator {
         }
 
         const factory = this.createScriptFactory();
-        const fn = execute.scopedEval(factory);
+        const fn = jsexecute.scopedEval(factory);
 
         log.info(`JS: ${this.target.getName()}: compiled ${this.script.procedureCode || 'script'}`, factory);
 
