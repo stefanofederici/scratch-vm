@@ -409,6 +409,11 @@ class Runtime extends EventEmitter {
             enabled: true,
             warpTimer: false
         };
+
+        // tw: interpolation
+        this._animationFrame = this._animationFrame.bind(this);
+        this._lastStep = Date.now();
+        this._animationFrameId = null;
     }
 
     /**
@@ -2116,20 +2121,31 @@ class Runtime extends EventEmitter {
         this.threads = [];
     }
 
+    // tw: interpolation
+    _animationFrame () {
+        this._animationFrameId = requestAnimationFrame(this._animationFrame);
+
+        const frameStarted = this._lastStep;
+        const now = Date.now();
+        const timeSinceStart = now - frameStarted;
+        const progressInFrame = Math.min(1, Math.max(0, timeSinceStart / this.currentStepTime));
+
+        interpolate.interpolateTargets(this, progressInFrame);
+
+        if (this.renderer) {
+            if (!document.hidden) {
+                this.renderer.draw();
+            }
+        }
+    }
+
     /**
      * Repeatedly run `sequencer.stepThreads` and filter out
      * inactive threads after each iteration.
      */
     _step () {
-        this.frame++;
-
-        if (this.frame % 2 === 1) {
-            interpolate.restoreTargets(this);
-            if (this.renderer) {
-                this.renderer.draw();
-            }
-            return;
-        }
+        // tw: interpolation
+        interpolate.setupTargets(this);
 
         if (this.profiler !== null) {
             if (stepProfilerId === -1) {
@@ -2137,8 +2153,6 @@ class Runtime extends EventEmitter {
             }
             this.profiler.start(stepProfilerId);
         }
-
-        interpolate.setupTargets(this);
 
         // Clean up threads that were told to stop during or since the last step
         this.threads = this.threads.filter(thread => !thread.isKilled);
@@ -2172,7 +2186,6 @@ class Runtime extends EventEmitter {
         // Store threads that completed this iteration for testing and other
         // internal purposes.
         this._lastStepDoneThreads = doneThreads;
-        interpolate.interpolateTargets(this);
         if (this.renderer) {
             // @todo: Only render when this.redrawRequested or clones rendered.
             if (this.profiler !== null) {
@@ -2181,10 +2194,7 @@ class Runtime extends EventEmitter {
                 }
                 this.profiler.start(rendererDrawProfilerId);
             }
-            // tw: do not draw if document is hidden
-            if (!document.hidden) {
-                this.renderer.draw();
-            }
+            // tw: interpolation: draw is handled in requestAnimationFrame
             if (this.profiler !== null) {
                 this.profiler.stop();
             }
@@ -2204,6 +2214,9 @@ class Runtime extends EventEmitter {
             this.profiler.stop();
             this.profiler.reportFrames();
         }
+
+        // tw: interpolation
+        this._lastStep = Date.now();
     }
 
     /**
@@ -2745,6 +2758,11 @@ class Runtime extends EventEmitter {
         // Do not start if we are already running
         if (this._steppingInterval) return;
 
+        // tw: interpolation
+        if (!this._animationFrameId) {
+            this._animationFrameId = requestAnimationFrame(this._animationFrame);
+        }
+
         const interval = 1000 / this.framerate;
         this.currentStepTime = interval;
         this._steppingInterval = setInterval(() => {
@@ -2763,6 +2781,11 @@ class Runtime extends EventEmitter {
         }
         clearInterval(this._steppingInterval);
         this._steppingInterval = null;
+
+        // tw: interpolation
+        cancelAnimationFrame(this._animationFrameId);
+        this._animationFrameId = null;
+
         this.emit(Runtime.RUNTIME_STOPPED);
     }
 
