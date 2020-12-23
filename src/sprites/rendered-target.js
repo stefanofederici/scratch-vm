@@ -161,6 +161,9 @@ class RenderedTarget extends Target {
          * @type {string}
          */
         this.textToSpeechLanguage = null;
+
+        // tw: interpolation
+        this.interpolationData = null;
     }
 
     /**
