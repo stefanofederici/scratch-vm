@@ -1,3 +1,7 @@
+/**
+ * Prepare the targets of a runtime for interpolation.
+ * @param {Runtime} runtime The Runtime with targets to prepare for interpolation.
+ */
 const setupInitialState = runtime => {
     for (const target of runtime.targets) {
         if (target.visible && !target.isStage) {
@@ -18,8 +22,8 @@ const setupInitialState = runtime => {
 
 /**
  * Interpolate the position of targets.
- * @param {Runtime} runtime The Runtime with targets to interpolate
- * @param {number} time Relative mid-frame time. [0-1]
+ * @param {Runtime} runtime The Runtime with targets to interpolate.
+ * @param {number} time Relative time in the frame in [0-1].
  */
 const interpolate = (runtime, time) => {
     const renderer = runtime.renderer;
