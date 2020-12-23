@@ -70,9 +70,7 @@ const interpolate = (runtime, time) => {
         // Interpolate scale and direction.
         const costumeDidChange = interpolationData.costume !== target.currentCostume;
         if (!costumeDidChange) {
-            const targetDirectionAndScale = target._getRenderedDirectionAndScale();
-            let direction = targetDirectionAndScale.direction;
-            let scale = targetDirectionAndScale.scale;
+            let {direction, scale} = target._getRenderedDirectionAndScale();
             let updateDrawableDirectionScale = false;
 
             // Interpolate direction.
@@ -99,10 +97,8 @@ const interpolate = (runtime, time) => {
                     const absoluteChangeY = Math.abs(changeY);
                     // Large changes are likely intended to be instantaneous.
                     if (absoluteChangeX < 100 && absoluteChangeY < 100) {
-                        scale = [
-                            startingScale[0] + changeX * time,
-                            startingScale[1] + changeY * time
-                        ];
+                        scale[0] = startingScale[0] + changeX * time;
+                        scale[1] = startingScale[1] + changeY * time;
                         updateDrawableDirectionScale = true;
                     }
                 }
