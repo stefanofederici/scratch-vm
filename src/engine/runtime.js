@@ -2133,9 +2133,7 @@ class Runtime extends EventEmitter {
         interpolate.interpolate(this, progressInFrame);
 
         if (this.renderer) {
-            if (!document.hidden) {
-                this.renderer.draw();
-            }
+            this.renderer.draw();
         }
     }
 
