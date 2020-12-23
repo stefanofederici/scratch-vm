@@ -2130,7 +2130,7 @@ class Runtime extends EventEmitter {
         const timeSinceStart = now - frameStarted;
         const progressInFrame = Math.min(1, Math.max(0, timeSinceStart / this.currentStepTime));
 
-        interpolate.interpolateTargets(this, progressInFrame);
+        interpolate.interpolate(this, progressInFrame);
 
         if (this.renderer) {
             if (!document.hidden) {
@@ -2145,7 +2145,7 @@ class Runtime extends EventEmitter {
      */
     _step () {
         // tw: interpolation
-        interpolate.setupTargets(this);
+        interpolate.setupInitialState(this);
 
         if (this.profiler !== null) {
             if (stepProfilerId === -1) {

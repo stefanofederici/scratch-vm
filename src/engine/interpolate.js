@@ -1,18 +1,4 @@
-const restoreTargets = runtime => {
-    for (const target of runtime.targets) {
-        if (target.interpolationData) {
-            runtime.renderer.updateDrawablePosition(target.drawableID, [
-                target.x,
-                target.y
-            ]);
-            const targetDirectionAndScale = target._getRenderedDirectionAndScale();
-            runtime.renderer.updateDrawableDirectionScale(target.drawableID, targetDirectionAndScale.direction, targetDirectionAndScale.scale);
-            runtime.renderer.updateDrawableEffect(target.drawableID, 'ghost', target.effects.ghost);
-        }
-    }
-};
-
-const setupTargets = runtime => {
+const setupInitialState = runtime => {
     for (const target of runtime.targets) {
         if (target.visible && !target.isStage) {
             const directionAndScale = target._getRenderedDirectionAndScale();
@@ -35,7 +21,7 @@ const setupTargets = runtime => {
  * @param {Runtime} runtime The Runtime with targets to interpolate
  * @param {number} time Relative mid-frame time. [0-1]
  */
-const interpolateTargets = (runtime, time) => {
+const interpolate = (runtime, time) => {
     const renderer = runtime.renderer;
     if (!renderer) {
         return;
@@ -128,7 +114,6 @@ const interpolateTargets = (runtime, time) => {
 };
 
 module.exports = {
-    restoreTargets,
-    setupTargets,
-    interpolateTargets
+    setupInitialState,
+    interpolate
 };
