@@ -391,12 +391,6 @@ class Runtime extends EventEmitter {
 
         this._stageTarget = null;
 
-        /**
-         * The number of frames that have been stepped.
-         * @type {number}
-         */
-        this.frame = 0;
-
         // 60 to match default of compatibility mode off
         // scratch-gui will set this to 30
         this.framerate = 60;
