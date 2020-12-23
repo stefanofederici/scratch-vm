@@ -83,8 +83,8 @@ const interpolate = (runtime, time) => {
         }
 
         // Interpolate scale and direction.
-        const costumeDidChange = interpolationData.costume !== target.currentCostume;
-        if (!costumeDidChange) {
+        const costumeUnchanged = interpolationData.costume === target.currentCostume;
+        if (costumeUnchanged) {
             let {direction, scale} = target._getRenderedDirectionAndScale();
             let updateDrawableDirectionScale = false;
 
