@@ -3,9 +3,20 @@
  * @param {Runtime} runtime The Runtime with targets to prepare for interpolation.
  */
 const setupInitialState = runtime => {
+    const renderer = runtime.renderer;
+
     for (const target of runtime.targets) {
+        const directionAndScale = target._getRenderedDirectionAndScale();
+
+        // If sprite may have been interpolated in the previous frame, reset its renderer state.
+        if (renderer && target.interpolationData) {
+            const drawableID = target.drawableID;
+            renderer.updateDrawablePosition(drawableID, [target.x, target.y]);
+            renderer.updateDrawableDirectionScale(drawableID, directionAndScale.direction, directionAndScale.scale);
+            renderer.updateDrawableEffect(drawableID, 'ghost', target.effects.ghost);
+        }
+
         if (target.visible && !target.isStage) {
-            const directionAndScale = target._getRenderedDirectionAndScale();
             target.interpolationData = {
                 x: target.x,
                 y: target.y,
