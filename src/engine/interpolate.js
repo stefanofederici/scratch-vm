@@ -50,6 +50,11 @@ const interpolate = (runtime, time) => {
             continue;
         }
 
+        // Don't waste time interpolating sprites that are hidden.
+        if (!target.visible) {
+            continue;
+        }
+
         const drawableID = target.drawableID;
 
         // Position interpolation.
