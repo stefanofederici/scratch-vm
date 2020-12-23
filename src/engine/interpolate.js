@@ -77,10 +77,9 @@ const interpolate = (runtime, time) => {
                 // The easiest way to find the average of two angles is using trig functions.
                 const currentRadians = direction * Math.PI / 180;
                 const startingRadians = interpolationData.direction * Math.PI / 180;
-                // TODO: interpolate using time
                 direction = Math.atan2(
-                    Math.sin(currentRadians) + Math.sin(startingRadians),
-                    Math.cos(currentRadians) + Math.cos(startingRadians)
+                    Math.sin(currentRadians) * time + Math.sin(startingRadians),
+                    Math.cos(currentRadians) * time + Math.cos(startingRadians)
                 ) * 180 / Math.PI;
                 // TODO: do not interpolate on large changes
                 updateDrawableDirectionScale = true;
