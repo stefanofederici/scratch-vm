@@ -26,9 +26,11 @@ const interpolate = (runtime, time) => {
     if (!renderer) {
         return;
     }
+
     for (const target of runtime.targets) {
+        // interpolationData is the initial state at the start of the frame (time 0)
+        // the state on the target itself is the state at the end of the frame (time 1)
         const interpolationData = target.interpolationData;
-        // Do not interpolate if no data.
         if (!interpolationData) {
             continue;
         }
@@ -48,6 +50,7 @@ const interpolate = (runtime, time) => {
             const xTolerance = Math.min(50, 10 + bounds.width);
             const yTolerance = Math.min(50, 10 + bounds.height);
 
+            // Large movements are likely intended to be instantaneous.
             if (absoluteXDistance < xTolerance && absoluteYDistance < yTolerance) {
                 const newX = interpolationData.x + xDistance * time;
                 const newY = interpolationData.y + yDistance * time;
@@ -58,7 +61,7 @@ const interpolate = (runtime, time) => {
         // Effect interpolation.
         const ghostChange = target.effects.ghost - interpolationData.ghost;
         const absoluteGhostChange = Math.abs(ghostChange);
-        // Do not interpolate large effect changes. Anything large is probably intended to be instantaneous.
+        // Large changes are likely intended to be instantaneous.
         if (absoluteGhostChange > 0 && absoluteGhostChange < 25) {
             const newGhost = target.effects.ghost + ghostChange * time;
             renderer.updateDrawableEffect(drawableID, 'ghost', newGhost);
@@ -94,7 +97,7 @@ const interpolate = (runtime, time) => {
                     const changeY = scale[1] - startingScale[1];
                     const absoluteChangeX = Math.abs(changeX);
                     const absoluteChangeY = Math.abs(changeY);
-                    // Only interpolate on small enough sizes. Anything larger is likely intended to be an instant change.
+                    // Large changes are likely intended to be instantaneous.
                     if (absoluteChangeX < 100 && absoluteChangeY < 100) {
                         scale = [
                             startingScale[0] + changeX * time,
