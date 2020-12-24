@@ -101,8 +101,8 @@ const interpolate = (runtime, time) => {
                     const currentRadians = direction * Math.PI / 180;
                     const startingRadians = interpolationData.direction * Math.PI / 180;
                     direction = Math.atan2(
-                        Math.sin(currentRadians) * time + Math.sin(startingRadians),
-                        Math.cos(currentRadians) * time + Math.cos(startingRadians)
+                        Math.sin(currentRadians) * time + Math.sin(startingRadians) * (1 - time),
+                        Math.cos(currentRadians) * time + Math.cos(startingRadians) * (1 - time)
                     ) * 180 / Math.PI;
                     updateDrawableDirectionScale = true;
                 }
