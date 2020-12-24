@@ -95,15 +95,17 @@ const interpolate = (runtime, time) => {
 
             // Interpolate direction.
             if (direction !== interpolationData.direction) {
-                // The easiest way to find the average of two angles is using trig functions.
-                const currentRadians = direction * Math.PI / 180;
-                const startingRadians = interpolationData.direction * Math.PI / 180;
-                direction = Math.atan2(
-                    Math.sin(currentRadians) * time + Math.sin(startingRadians),
-                    Math.cos(currentRadians) * time + Math.cos(startingRadians)
-                ) * 180 / Math.PI;
-                // TODO: do not interpolate on large changes
-                updateDrawableDirectionScale = true;
+                // Perfect 90 degree angles should not be interpolated.
+                // eg. the foreground tile clones in https://scratch.mit.edu/projects/60917032/
+                if (direction % 90 !== 0 || interpolationData.direction % 90 !== 0) {
+                    const currentRadians = direction * Math.PI / 180;
+                    const startingRadians = interpolationData.direction * Math.PI / 180;
+                    direction = Math.atan2(
+                        Math.sin(currentRadians) * time + Math.sin(startingRadians),
+                        Math.cos(currentRadians) * time + Math.cos(startingRadians)
+                    ) * 180 / Math.PI;
+                    updateDrawableDirectionScale = true;
+                }
             }
 
             // Interpolate scale.
