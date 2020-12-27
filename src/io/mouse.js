@@ -4,6 +4,7 @@ class Mouse {
     constructor (runtime) {
         this._x = 0;
         this._y = 0;
+        this._buttons = new Set();
         this._isDown = false;
         /**
          * Reference to the owning Runtime.
@@ -77,6 +78,14 @@ class Mouse {
             ));
         }
         if (typeof data.isDown !== 'undefined') {
+            // If no button specified, default to left button for compatibility
+            const button = typeof data.button === 'undefined' ? 0 : data.button;
+            if (data.isDown) {
+                this._buttons.add(button);
+            } else {
+                this._buttons.delete(button);
+            }
+
             const previousDownState = this._isDown;
             this._isDown = data.isDown;
 
@@ -161,6 +170,15 @@ class Mouse {
         this._scratchY = MathUtil.clamp(this._movementY, -180, 180);
         this._movementX = 0;
         this._movementY = 0;
+    }
+
+    /**
+     * tw: Get the down state of a specific button of the mouse.
+     * @param {number} button The ID of the button. 0 = left, 1 = middle, 2 = right
+     * @return {boolean} Is the mouse button down?
+     */
+    getButtonIsDown (button) {
+        return this._buttons.has(button);
     }
 }
 

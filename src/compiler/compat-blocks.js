@@ -9,8 +9,6 @@ const stacked = [
     'control_get_counter',
     'control_incr_counter',
     'looks_changeeffectby',
-    'looks_nextbackdrop',
-    'looks_nextcostume',
     'looks_say',
     'looks_sayforsecs',
     'looks_seteffectto',
@@ -22,6 +20,7 @@ const stacked = [
     'motion_goto',
     'motion_pointtowards',
     'music_changeTempo',
+    'music_midiSetInstrument',
     'music_playDrumForBeats',
     'music_playNoteForBeats',
     'music_restForBeats',
@@ -52,6 +51,7 @@ const inputs = [
     'sound_volume',
     'translate_getTranslate',
     'translate_getViewerLanguage',
+    'tw_getButtonIsDown', // TODO: should compile this
     'videoSensing_videoOn'
 ];
 
