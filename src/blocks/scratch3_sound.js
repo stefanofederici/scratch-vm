@@ -279,6 +279,13 @@ class Scratch3SoundBlocks {
         soundState.effects[effect] = MathUtil.clamp(soundState.effects[effect], min, max);
 
         this._syncEffectsForTarget(util.target);
+
+        // tw: compiled warp threads should not yield for the tick
+        if (util.thread.warp > 0) {
+            this.runtime.requestRedraw();
+            return;
+        }
+
         // Yield until the next tick.
         return Promise.resolve();
     }
@@ -325,6 +332,12 @@ class Scratch3SoundBlocks {
         volume = MathUtil.clamp(volume, 0, 100);
         util.target.volume = volume;
         this._syncEffectsForTarget(util.target);
+
+        // tw: compiled warp threads should not yield for the tick
+        if (util.thread.warp > 0) {
+            this.runtime.requestRedraw();
+            return;
+        }
 
         // Yield until the next tick.
         return Promise.resolve();
