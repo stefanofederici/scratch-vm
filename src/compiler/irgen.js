@@ -145,6 +145,7 @@ class ScriptTreeGenerator {
             // lastIndexOf because multiple parameters with the same name will use the value of the last definition
             const index = this.script.arguments.lastIndexOf(name);
             if (index === -1) {
+                // Legacy support
                 if (name.toLowerCase() === 'last key pressed') {
                     return {
                         kind: 'tw.lastKeyPressed'
@@ -678,6 +679,16 @@ class ScriptTreeGenerator {
             return {
                 kind: 'constant',
                 value: block.fields.languages.value
+            };
+
+        case 'tw_getLastKeyPressed':
+            return {
+                kind: 'tw.lastKeyPressed'
+            };
+        case 'tw_menu_mouseButton':
+            return {
+                kind: 'constant',
+                value: block.fields.mouseButton.value
             };
 
         case 'videoSensing_menu_ATTRIBUTE':
@@ -1313,13 +1324,14 @@ class ScriptTreeGenerator {
         const newVariable = new Variable(id, name, type, false);
         target.variables[id] = newVariable;
 
-        // If the sprite being compiled right now is a clone, we should also create the variable in the original sprite.
-        // This is necessary because the script cache is shared between clones, and clones won't inherit this variable.
-        if (!target.isOriginal) {
-            // The original sprite will usually be the first item of `clones`, but it's possible that it might not be.
-            const original = this.target.sprite.clones.find(t => t.isOriginal);
-            if (original && !original.variables.hasOwnProperty(id)) {
-                original.variables[id] = new Variable(id, name, type, false);
+        if (target.sprite) {
+            // Create the variable in all instances of this sprite.
+            // This is necessary because the script cache is shared between clones.
+            // sprite.clones has all instances of this sprite including the original and all clones
+            for (const clone of target.sprite.clones) {
+                if (!clone.variables.hasOwnProperty(id)) {
+                    clone.variables[id] = new Variable(id, name, type, false);
+                }
             }
         }
 

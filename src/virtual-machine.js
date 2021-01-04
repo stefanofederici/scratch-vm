@@ -37,6 +37,8 @@ const CORE_EXTENSIONS = [
     // 'operators',
     // 'variables',
     // 'myBlocks'
+    // tw: core extension
+    'tw'
 ];
 
 /**
@@ -442,7 +444,30 @@ class VirtualMachine extends EventEmitter {
             compressionOptions: {
                 level: 6 // Tradeoff between best speed (1) and best compression (9)
             }
+        }).then(result => {
+            // tw: We want to let the GUI know whether this project uses block that won't work in Scratch.
+            result.usesExtendedExtensions = JSON.parse(projectJson).extensions.includes('tw');
+            return result;
         });
+    }
+
+    /**
+     * tw: Serailize the project into a map of files without actually zipping the project.
+     * @returns {Record<Uint8Array>} Files of the project.
+     */
+    saveProjectSb3DontZip () {
+        const soundDescs = serializeSounds(this.runtime);
+        const costumeDescs = serializeCostumes(this.runtime);
+        const projectJson = this.toJSON();
+
+        const files = {
+            'project.json': new TextEncoder().encode(projectJson)
+        };
+        for (const fileDesc of soundDescs.concat(costumeDescs)) {
+            files[fileDesc.fileName] = fileDesc.fileContent;
+        }
+
+        return files;
     }
 
     /*

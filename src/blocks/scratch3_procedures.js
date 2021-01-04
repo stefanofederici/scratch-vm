@@ -58,8 +58,8 @@ class Scratch3ProcedureBlocks {
     argumentReporterStringNumber (args, util) {
         const value = util.getParam(args.VALUE);
         if (value === null) {
-            // tw: support some more blocks
-            if (`${args.VALUE}`.toLowerCase() === 'last key pressed') {
+            // tw: support legacy block
+            if (String(args.VALUE).toLowerCase() === 'last key pressed') {
                 return util.ioQuery('keyboard', 'getLastKeyPressed');
             }
             // When the parameter is not found in the most recent procedure
@@ -72,14 +72,13 @@ class Scratch3ProcedureBlocks {
     argumentReporterBoolean (args, util) {
         const value = util.getParam(args.VALUE);
         if (value === null) {
-            // tw: is compiled? and is turbowarp? should return true
-            // Yes, is compiled? is returning a technically incorrect value.
-            // This results in the least astonishment for users when they click on "is compiled?" on its own.
-            if (util.target.runtime.compilerOptions.enabled) {
-                const lowercaseValue = `${args.VALUE}`.toLowerCase();
-                if (lowercaseValue === 'is compiled?' || lowercaseValue === 'is turbowarp?') {
-                    return true;
-                }
+            // tw: implement is compiled? and is turbowarp?
+            const lowercaseValue = String(args.VALUE).toLowerCase();
+            if (util.target.runtime.compilerOptions.enabled && lowercaseValue === 'is compiled?') {
+                return true;
+            }
+            if (lowercaseValue === 'is turbowarp?') {
+                return true;
             }
             // When the parameter is not found in the most recent procedure
             // call, the default is always 0.

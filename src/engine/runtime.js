@@ -2136,6 +2136,8 @@ class Runtime extends EventEmitter {
      * inactive threads after each iteration.
      */
     _step () {
+        this.beforeStep();
+
         // tw: interpolation
         interpolate.setupInitialState(this);
 
@@ -2209,6 +2211,16 @@ class Runtime extends EventEmitter {
 
         // tw: interpolation
         this._lastStep = Date.now();
+
+        this.afterStep();
+    }
+
+    beforeStep () {
+
+    }
+
+    afterStep () {
+
     }
 
     /**
