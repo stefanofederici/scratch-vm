@@ -718,7 +718,7 @@ class Scratch3MusicBlocks {
      * @type {number}
      */
     static get CONCURRENCY_LIMIT () {
-        return 30;
+        return Infinity;
     }
 
     /**
