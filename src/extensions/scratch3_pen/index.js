@@ -98,7 +98,7 @@ class Scratch3PenBlocks {
      * @type {{min: number, max: number}}
      */
     static get PEN_SIZE_RANGE () {
-        return {min: 1, max: 1200};
+        return {min: 0, max: Infinity};
     }
 
     /**
