@@ -279,8 +279,8 @@ class Scratch3SoundBlocks {
         soundState.effects[effect] = MathUtil.clamp(soundState.effects[effect], min, max);
 
         this._syncEffectsForTarget(util.target);
-        // Yield until the next tick.
-        return Promise.resolve();
+
+        this.runtime.requestRedraw();
     }
 
     _syncEffectsForTarget (target) {
@@ -326,8 +326,7 @@ class Scratch3SoundBlocks {
         util.target.volume = volume;
         this._syncEffectsForTarget(util.target);
 
-        // Yield until the next tick.
-        return Promise.resolve();
+        this.runtime.requestRedraw();
     }
 
     getVolume (args, util) {
