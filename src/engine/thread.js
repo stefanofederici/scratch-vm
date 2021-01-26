@@ -427,8 +427,7 @@ class Thread {
      * Attempt to compile this thread.
      */
     tryCompile () {
-        const blocks = this.blockContainer;
-        if (!blocks) {
+        if (!this.blockContainer) {
             return;
         }
 
@@ -438,8 +437,10 @@ class Thread {
         this.triedToCompile = true;
 
         const topBlock = this.topBlock;
+        // Flyout blocks are stored in a special block container.
+        const blocks = this.blockContainer.getBlock(topBlock) ? this.blockContainer : this.target.runtime.flyoutBlocks;
         const cachedResult = blocks.getCachedCompileResult(topBlock);
-        // If there is a cached result that indicates, error, do not attempt to compile.
+        // If there is a cached error, do not attempt to recompile.
         if (cachedResult && !cachedResult.success) {
             return;
         }
@@ -466,7 +467,7 @@ class Thread {
 
         this.generator = result.startingFunction(this.target)();
 
-        if (!blocks.forceNoGlow) {
+        if (!this.blockContainer.forceNoGlow) {
             this.blockGlowInFrame = this.topBlock;
             this.requestScriptGlowInFrame = true;
         }
