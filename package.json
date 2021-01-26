@@ -9,7 +9,7 @@
     "type": "git",
     "url": "git+ssh://git@github.com/LLK/scratch-vm.git"
   },
-  "main": "./dist/node/scratch-vm.js",
+  "main": "./src/index.js",
   "browser": "./src/index.js",
   "scripts": {
     "build": "npm run docs && webpack --progress --colors --bail",
@@ -82,5 +82,6 @@
     "webpack": "^4.16.5",
     "webpack-cli": "^3.1.0",
     "webpack-dev-server": "^3.1.5"
-  }
+  },
+  "private": true
 }

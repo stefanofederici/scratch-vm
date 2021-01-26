@@ -1,4 +1,6 @@
 const Cast = require('../util/cast');
+const StringUtil = require('../util/string-util');
+const BlockType = require('../extension-support/block-type');
 const Variable = require('../engine/variable');
 const log = require('../util/log');
 const {IntermediateScript, IntermediateRepresentation} = require('./intermediate');
@@ -74,6 +76,27 @@ class ScriptTreeGenerator {
         this.script.isWarp = true;
     }
 
+    getBlockById (blockId) {
+        // Flyout blocks are stored in a special container.
+        return this.blocks.getBlock(blockId) || this.blocks.runtime.flyoutBlocks.getBlock(blockId);
+    }
+
+    getBlockInfo (fullOpcode) {
+        const [category, opcode] = StringUtil.splitFirst(fullOpcode, '_');
+        if (!category || !opcode) {
+            return null;
+        }
+        const categoryInfo = this.runtime._blockInfo.find(ci => ci.id === category);
+        if (!categoryInfo) {
+            return null;
+        }
+        const blockInfo = categoryInfo.blocks.find(b => b.info.opcode === opcode);
+        if (!blockInfo) {
+            return null;
+        }
+        return blockInfo;
+    }
+
     /**
      * Descend into a child input of a block. (eg. the input STRING of "length of ( )")
      * @param {*} parentBlock The parent Scratch block that contains the input.
@@ -91,7 +114,7 @@ class ScriptTreeGenerator {
             };
         }
         const inputId = input.block;
-        const block = this.blocks.getBlock(inputId);
+        const block = this.getBlockById(inputId);
         if (!block) {
             log.warn(`IR: ${parentBlock.opcode}: could not find input ${inputName} with ID ${inputId}`);
             return {
@@ -185,12 +208,6 @@ class ScriptTreeGenerator {
             };
         }
 
-        case 'control_create_clone_of_menu':
-            return {
-                kind: 'constant',
-                value: block.fields.CLONE_OPTION.value
-            };
-
         case 'data_variable':
             return {
                 kind: 'var.get',
@@ -225,12 +242,6 @@ class ScriptTreeGenerator {
                 list: this.descendVariable(block, 'LIST', LIST_TYPE)
             };
 
-        case 'event_broadcast_menu':
-            return {
-                kind: 'constant',
-                value: block.fields.BROADCAST_OPTION.value
-            };
-
         case 'looks_backdropnumbername':
             if (block.fields.NUMBER_NAME.value === 'number') {
                 return {
@@ -239,16 +250,6 @@ class ScriptTreeGenerator {
             }
             return {
                 kind: 'looks.backdropName'
-            };
-        case 'looks_backdrops':
-            return {
-                kind: 'constant',
-                value: block.fields.BACKDROP.value
-            };
-        case 'looks_costume':
-            return {
-                kind: 'constant',
-                value: block.fields.COSTUME.value
             };
         case 'looks_costumenumbername':
             if (block.fields.NUMBER_NAME.value === 'number') {
@@ -268,21 +269,6 @@ class ScriptTreeGenerator {
             return {
                 kind: 'motion.direction'
             };
-        case 'motion_glideto_menu':
-            return {
-                kind: 'constant',
-                value: block.fields.TO.value
-            };
-        case 'motion_goto_menu':
-            return {
-                kind: 'constant',
-                value: block.fields.TO.value
-            };
-        case 'motion_pointtowards_menu':
-            return {
-                kind: 'constant',
-                value: block.fields.TOWARDS.value
-            };
         case 'motion_xposition':
             return {
                 kind: 'motion.x'
@@ -290,23 +276,6 @@ class ScriptTreeGenerator {
         case 'motion_yposition':
             return {
                 kind: 'motion.y'
-            };
-
-        case 'music_menu_DRUM':
-            return {
-                kind: 'constant',
-                value: block.fields.DRUM.value
-            };
-        case 'music_menu_INSTRUMENT':
-            return {
-                kind: 'constant',
-                value: block.fields.INSTRUMENT.value
-            };
-
-        case 'note':
-            return {
-                kind: 'constant',
-                value: block.fields.NOTE.value
             };
 
         case 'operator_add':
@@ -536,12 +505,6 @@ class ScriptTreeGenerator {
                 right: this.descendInputOfBlock(block, 'NUM2')
             };
 
-        case 'pen_menu_colorParam':
-            return {
-                kind: 'constant',
-                value: block.fields.colorParam.value
-            };
-
         case 'sensing_answer':
             return {
                 kind: 'sensing.answer'
@@ -591,20 +554,10 @@ class ScriptTreeGenerator {
             return {
                 kind: 'sensing.daysSince2000'
             };
-        case 'sensing_distancetomenu':
-            return {
-                kind: 'constant',
-                value: block.fields.DISTANCETOMENU.value
-            };
         case 'sensing_distanceto':
             return {
                 kind: 'sensing.distance',
                 target: this.descendInputOfBlock(block, 'DISTANCETOMENU')
-            };
-        case 'sensing_keyoptions':
-            return {
-                kind: 'constant',
-                value: block.fields.KEY_OPTION.value
             };
         case 'sensing_keypressed':
             return {
@@ -622,11 +575,6 @@ class ScriptTreeGenerator {
         case 'sensing_mousey':
             return {
                 kind: 'mouse.y'
-            };
-        case 'sensing_of_object_menu':
-            return {
-                kind: 'constant',
-                value: block.fields.OBJECT.value
             };
         case 'sensing_of':
             return {
@@ -648,72 +596,51 @@ class ScriptTreeGenerator {
                 kind: 'sensing.touching',
                 object: this.descendInputOfBlock(block, 'TOUCHINGOBJECTMENU')
             };
-        case 'sensing_touchingobjectmenu':
-            return {
-                kind: 'constant',
-                value: block.fields.TOUCHINGOBJECTMENU.value
-            };
         case 'sensing_username':
             return {
                 kind: 'sensing.username'
             };
 
         case 'sound_sounds_menu':
+            // This menu is special compared to other menus -- it actually has an opcode function.
             return {
                 kind: 'constant',
                 value: block.fields.SOUND_MENU.value
-            };
-
-        case 'text2speech_menu_languages':
-            return {
-                kind: 'constant',
-                value: block.fields.languages.value
-            };
-        case 'text2speech_menu_voices':
-            return {
-                kind: 'constant',
-                value: block.fields.voices.value
-            };
-
-        case 'translate_menu_languages':
-            return {
-                kind: 'constant',
-                value: block.fields.languages.value
             };
 
         case 'tw_getLastKeyPressed':
             return {
                 kind: 'tw.lastKeyPressed'
             };
-        case 'tw_menu_mouseButton':
-            return {
-                kind: 'constant',
-                value: block.fields.mouseButton.value
-            };
 
-        case 'videoSensing_menu_ATTRIBUTE':
-            return {
-                kind: 'constant',
-                value: block.fields.ATTRIBUTE.value
-            };
-        case 'videoSensing_menu_SUBJECT':
-            return {
-                kind: 'constant',
-                value: block.fields.SUBJECT.value
-            };
-        case 'videoSensing_menu_VIDEO_STATE':
-            return {
-                kind: 'constant',
-                value: block.fields.VIDEO_STATE.value
-            };
-
-        default:
-            // It might be a block that uses the compatibility layer
-            if (compatBlocks.inputs.includes(block.opcode)) {
-                return this.descendCompatLayer(block);
+        default: {
+            const opcodeFunction = this.runtime.getOpcodeFunction(block.opcode);
+            if (opcodeFunction) {
+                // It might be a non-compiled primitive from a standard category
+                if (compatBlocks.inputs.includes(block.opcode)) {
+                    return this.descendCompatLayer(block);
+                }
+                // It might be an extension block.
+                const blockInfo = this.getBlockInfo(block.opcode);
+                if (blockInfo) {
+                    const type = blockInfo.info.blockType;
+                    if (type === BlockType.REPORTER || type === BlockType.BOOLEAN) {
+                        return this.descendCompatLayer(block);
+                    }
+                }
             }
-            log.warn(`IR: Unknown input: ${block.opcode}`, block);
+
+            // It might be a menu.
+            const inputs = Object.keys(block.inputs);
+            const fields = Object.keys(block.fields);
+            if (inputs.length === 0 && fields.length === 1) {
+                return {
+                    kind: 'constant',
+                    value: block.fields[fields[0]].value
+                };
+            }
             throw new Error(`IR: Unknown input: ${block.opcode}`);
+        }
         }
     }
 
@@ -1190,24 +1117,37 @@ class ScriptTreeGenerator {
             };
 
         default: {
-            // It might be a block that uses the compatibility layer
-            if (compatBlocks.stacked.includes(block.opcode)) {
-                return this.descendCompatLayer(block);
+            const opcodeFunction = this.runtime.getOpcodeFunction(block.opcode);
+            if (opcodeFunction) {
+                // It might be a non-compiled primitive from a standard category
+                if (compatBlocks.stacked.includes(block.opcode)) {
+                    return this.descendCompatLayer(block);
+                }
+                // It might be an extension block.
+                const blockInfo = this.getBlockInfo(block.opcode);
+                if (blockInfo) {
+                    const type = blockInfo.info.blockType;
+                    if (type === BlockType.COMMAND) {
+                        return this.descendCompatLayer(block);
+                    }
+                }
             }
+
+            // When this thread was triggered by a stack click, attempt to compile as an input.
+            // TODO: perhaps this should be moved to generate()?
+            if (this.thread.stackClick) {
+                try {
+                    const inputNode = this.descendInput(block);
+                    return {
+                        kind: 'visualReport',
+                        input: inputNode
+                    };
+                } catch (e) {
+                    // Ignore
+                }
+            }
+
             log.warn(`IR: Unknown stacked block: ${block.opcode}`, block);
-
-            // Try to compile as an input.
-            let isValidInput;
-            try {
-                this.descendInput(block);
-                isValidInput = true;
-            } catch (e) {
-                isValidInput = false;
-            }
-
-            if (isValidInput) {
-                throw new Error(`IR: This block is an input, not a stacked block: ${block.opcode}`);
-            }
             throw new Error(`IR: Unknown stacked block: ${block.opcode}`);
         }
         }
@@ -1240,7 +1180,7 @@ class ScriptTreeGenerator {
         let blockId = startingBlockId;
 
         while (blockId !== null) {
-            const block = this.blocks.getBlock(blockId);
+            const block = this.getBlockById(blockId);
             if (!block) {
                 throw new Error('no block');
             }
@@ -1406,14 +1346,15 @@ class ScriptTreeGenerator {
     generate (topBlockId) {
         this.blocks.populateProcedureCache();
 
-        const topBlock = this.blocks.getBlock(topBlockId);
+        this.script.topBlockId = topBlockId;
+
+        const topBlock = this.getBlockById(topBlockId);
         if (!topBlock) {
             if (this.script.isProcedure) {
                 // Empty procedure
                 return this.script;
             }
-            // Probably running from toolbox. This is not currently supported.
-            throw new Error('Cannot find top block (running from toolbox?)');
+            throw new Error('Cannot find top block');
         }
 
         if (topBlock.comment) {
