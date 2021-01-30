@@ -308,6 +308,12 @@ class Frame {
          * @type {boolean}
          */
         this.isLastBlock = false;
+
+        /**
+         * Stored map of variable ID -> last input.
+         * @type {Object.<string, VariableInput>}
+         */
+        this.variableInputs = {};
     }
 }
 
@@ -322,11 +328,6 @@ class JSGenerator {
         this.ir = ir;
         this.target = target;
         this.source = '';
-
-        /**
-         * @type {Object.<string, VariableInput>}
-         */
-        this.variableInputs = {};
 
         this.isWarp = script.isWarp;
         this.isProcedure = script.isProcedure;
@@ -948,13 +949,12 @@ class JSGenerator {
     }
 
     resetVariableInputs () {
-        this.variableInputs = {};
+        for (const frame of this.frames) {
+            frame.variableInputs = {};
+        }
     }
 
     descendStack (nodes, frame) {
-        // Entering a stack -- all bets are off.
-        // TODO: allow if/else to inherit values
-        this.resetVariableInputs();
         this.pushFrame(frame);
 
         for (let i = 0; i < nodes.length; i++) {
@@ -962,18 +962,24 @@ class JSGenerator {
             this.descendStackedBlock(nodes[i]);
         }
 
-        // Leaving a stack -- any assumptions made in the current stack do not apply outside of it
-        // TODO: in if/else this might create an extra unused object
-        this.resetVariableInputs();
         this.popFrame();
     }
 
     descendVariable (variable) {
-        if (this.variableInputs.hasOwnProperty(variable.id)) {
-            return this.variableInputs[variable.id];
+        for (let i = this.frames.length - 1; i >= 0; i--) {
+            const frame = this.frames[i];
+            const variableInputs = frame.variableInputs;
+            if (variableInputs[variable.id]) {
+                return variableInputs[variable.id];
+            }
+        }
+        for (const frame of this.frames) {
+            if (frame.variableInputs[variable.id]) {
+                frame.variableInputs[variable.id] = null;
+            }
         }
         const input = new VariableInput(`${this.referenceVariable(variable)}.value`);
-        this.variableInputs[variable.id] = input;
+        this.frame.variableInputs[variable.id] = input;
         return input;
     }
 
