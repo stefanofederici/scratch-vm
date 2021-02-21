@@ -42,6 +42,8 @@ const defaultBlockPackages = {
     scratch3_procedures: require('../blocks/scratch3_procedures')
 };
 
+const interpolate = require('./tw-interpolate');
+
 const defaultExtensionColors = ['#0FBD8C', '#0DA57A', '#0B8E69'];
 
 /**
@@ -393,6 +395,9 @@ class Runtime extends EventEmitter {
         // scratch-gui will set this to 30
         this.framerate = 60;
 
+        this.stageWidth = Runtime.STAGE_WIDTH;
+        this.stageHeight = Runtime.STAGE_HEIGHT;
+
         this.runtimeOptions = {
             maxClones: Runtime.MAX_CLONES
         };
@@ -401,6 +406,11 @@ class Runtime extends EventEmitter {
             enabled: true,
             warpTimer: false
         };
+
+        this._animationFrame = this._animationFrame.bind(this);
+        this._animationFrameId = null;
+        this._lastStepTime = Date.now();
+        this.interpolationEnabled = false;
     }
 
     /**
@@ -408,6 +418,7 @@ class Runtime extends EventEmitter {
      * @const {number}
      */
     static get STAGE_WIDTH () {
+        // tw: stage size is set per-runtime, this is only the initial value
         return 480;
     }
 
@@ -416,6 +427,7 @@ class Runtime extends EventEmitter {
      * @const {number}
      */
     static get STAGE_HEIGHT () {
+        // tw: stage size is set per-runtime, this is only the initial value
         return 360;
     }
 
@@ -477,7 +489,7 @@ class Runtime extends EventEmitter {
     }
 
     /**
-     * Event name for compiler options changing.
+     * Event name for runtime options changing.
      * @const {string}
      */
     static get RUNTIME_OPTIONS_CHANGED () {
@@ -498,6 +510,14 @@ class Runtime extends EventEmitter {
      */
     static get FRAMERATE_CHANGED () {
         return 'FRAMERATE_CHANGED';
+    }
+
+    /**
+     * Event name for interpolation changing.
+     * @const {string}
+     */
+    static get INTERPOLATION_CHANGED () {
+        return 'INTERPOLATION_CHANGED';
     }
 
     /**
@@ -957,6 +977,31 @@ class Runtime extends EventEmitter {
                 );
 
                 categoryInfo.customFieldTypes[fieldTypeName] = fieldTypeInfo;
+            }
+        }
+
+        if (extensionInfo.docsURI) {
+            try {
+                const url = new URL(extensionInfo.docsURI);
+                if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+                    throw new Error('invalid protocol');
+                }
+                const xml = '<button ' +
+                    `text="${xmlEscape(maybeFormatMessage({
+                        // note: this translation is hardcoded in translation upload scripts
+                        id: 'tw.blocks.openDocs',
+                        default: 'Open Documentation',
+                        description: 'Button to open extensions docsURI'
+                    }))}" ` +
+                    'callbackKey="OPEN_DOCUMENTATION" ' +
+                    `web-class="docs-uri-${xmlEscape(extensionInfo.docsURI)}"></button>`;
+                const block = {
+                    info: {},
+                    xml
+                };
+                categoryInfo.blocks.push(block);
+            } catch (e) {
+                log.warn('cannot create docsURI button', e);
             }
         }
 
@@ -1613,6 +1658,7 @@ class Runtime extends EventEmitter {
      */
     attachAudioEngine (audioEngine) {
         this.audioEngine = audioEngine;
+        require('./tw-experimental-audio-optimizations')(audioEngine);
     }
 
     /**
@@ -2072,6 +2118,7 @@ class Runtime extends EventEmitter {
     greenFlag () {
         this.stopAll();
         this.emit(Runtime.PROJECT_START);
+        this.updateCurrentMSecs();
         this.ioDevices.clock.resetProjectTimer();
         this.targets.forEach(target => target.clearEdgeActivatedValues());
         // Inform all targets of the green flag.
@@ -2108,6 +2155,21 @@ class Runtime extends EventEmitter {
         this.threads = [];
     }
 
+    _animationFrame () {
+        this._animationFrameId = requestAnimationFrame(this._animationFrame);
+
+        const frameStarted = this._lastStepTime;
+        const now = Date.now();
+        const timeSinceStart = now - frameStarted;
+        const progressInFrame = Math.min(1, Math.max(0, timeSinceStart / this.currentStepTime));
+
+        interpolate.interpolate(this, progressInFrame);
+
+        if (this.renderer) {
+            this.renderer.draw();
+        }
+    }
+
     /**
      * Repeatedly run `sequencer.stepThreads` and filter out
      * inactive threads after each iteration.
@@ -2116,6 +2178,9 @@ class Runtime extends EventEmitter {
         this.beforeStep();
 
         this.ioDevices.mouse.flushMovement();
+        if (this.interpolationEnabled) {
+            interpolate.setupInitialState(this);
+        }
 
         if (this.profiler !== null) {
             if (stepProfilerId === -1) {
@@ -2164,8 +2229,8 @@ class Runtime extends EventEmitter {
                 }
                 this.profiler.start(rendererDrawProfilerId);
             }
-            // tw: do not draw if document is hidden
-            if (!document.hidden) {
+            // tw: do not draw if document is hidden or a rAF loop is running
+            if (!document.hidden && this._animationFrameId === null) {
                 this.renderer.draw();
             }
             if (this.profiler !== null) {
@@ -2186,6 +2251,10 @@ class Runtime extends EventEmitter {
         if (this.profiler !== null) {
             this.profiler.stop();
             this.profiler.reportFrames();
+        }
+
+        if (this.interpolationEnabled) {
+            this._lastStepTime = Date.now();
         }
 
         this.afterStep();
@@ -2265,6 +2334,19 @@ class Runtime extends EventEmitter {
             this.start();
         }
         this.emit(Runtime.FRAMERATE_CHANGED, framerate);
+    }
+
+    /**
+     * tw: Enable or disable interpolation.
+     * @param {boolean} interpolationEnabled True if interpolation should be enabled.
+     */
+    setInterpolation (interpolationEnabled) {
+        this.interpolationEnabled = interpolationEnabled;
+        if (this._steppingInterval) {
+            this.stop();
+            this.start();
+        }
+        this.emit(Runtime.INTERPOLATION_CHANGED, interpolationEnabled);
     }
 
     /**
@@ -2738,6 +2820,10 @@ class Runtime extends EventEmitter {
         // Do not start if we are already running
         if (this._steppingInterval) return;
 
+        if (this.interpolationEnabled) {
+            this._animationFrameId = requestAnimationFrame(this._animationFrame);
+        }
+
         const interval = 1000 / this.framerate;
         this.currentStepTime = interval;
         this._steppingInterval = setInterval(() => {
@@ -2756,6 +2842,13 @@ class Runtime extends EventEmitter {
         }
         clearInterval(this._steppingInterval);
         this._steppingInterval = null;
+
+        // tw: also cancel the animation frame loop
+        if (this._animationFrameId !== null) {
+            cancelAnimationFrame(this._animationFrameId);
+            this._animationFrameId = null;
+        }
+
         this.emit(Runtime.RUNTIME_STOPPED);
     }
 

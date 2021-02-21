@@ -37,9 +37,12 @@ const CORE_EXTENSIONS = [
     // 'operators',
     // 'variables',
     // 'myBlocks'
-    // tw: core extension
-    'tw'
 ];
+
+// Disable missing translation warnings in console
+formatMessage.setup({
+    missingTranslation: 'ignore'
+});
 
 /**
  * Handles connections between blocks, stage, and extensions.
@@ -168,6 +171,9 @@ class VirtualMachine extends EventEmitter {
         this.runtime.on(Runtime.FRAMERATE_CHANGED, framerate => {
             this.emit(Runtime.FRAMERATE_CHANGED, framerate);
         });
+        this.runtime.on(Runtime.INTERPOLATION_CHANGED, framerate => {
+            this.emit(Runtime.INTERPOLATION_CHANGED, framerate);
+        });
         this.runtime.on(Runtime.COMPILE_ERROR, (target, error) => {
             this.emit(Runtime.COMPILE_ERROR, target, error);
         });
@@ -232,6 +238,10 @@ class VirtualMachine extends EventEmitter {
 
     setFramerate (framerate) {
         this.runtime.setFramerate(framerate);
+    }
+
+    setInterpolation (interpolationEnabled) {
+        this.runtime.setInterpolation(interpolationEnabled);
     }
 
     setRuntimeOptions (runtimeOptions) {
@@ -461,7 +471,7 @@ class VirtualMachine extends EventEmitter {
         const projectJson = this.toJSON();
 
         const files = {
-            'project.json': new TextEncoder().encode(projectJson)
+            'project.json': new _TextEncoder().encode(projectJson)
         };
         for (const fileDesc of soundDescs.concat(costumeDescs)) {
             files[fileDesc.fileName] = fileDesc.fileContent;
