@@ -114,10 +114,12 @@ class Mouse {
         }
         if (typeof data.useMovement === 'boolean') {
             this._useMovement = data.useMovement;
+            this._scratchX = 0;
+            this._scratchY = 0;
         }
         if (typeof data.movementX === 'number' && typeof data.movementY === 'number') {
-            this._movementX += 480 * ((data.movementX / data.canvasWidth) - 0.5);
-            this._movementY += -360 * ((data.movementY / data.canvasHeight) - 0.5);
+            this._movementX += this.runtime.stageWidth * ((data.movementX / data.canvasWidth) - 0.5);
+            this._movementY += -this.runtime.stageHeight * ((data.movementY / data.canvasHeight) - 0.5);
         }
     }
 
@@ -167,8 +169,8 @@ class Mouse {
         }
         this._clientX = this._movementX;
         this._clientY = this._movementY;
-        this._scratchX = MathUtil.clamp(this._movementX, -240, 240);
-        this._scratchY = MathUtil.clamp(this._movementY, -180, 180);
+        this._scratchX = Math.round(MathUtil.clamp(this._movementX, -this.runtime.stageWidth / 2, this.runtime.stageWidth / 2));
+        this._scratchY = Math.round(MathUtil.clamp(this._movementY, -this.runtime.stageHeight / 2, this.runtime.stageHeight / 2));
         this._movementX = 0;
         this._movementY = 0;
     }
