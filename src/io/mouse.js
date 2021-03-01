@@ -144,6 +144,7 @@ class Mouse {
      * @return {number} Clamped and integer rounded X position of the mouse cursor.
      */
     getScratchX () {
+        if (!this.locked) return '-0';
         return this._scratchX;
     }
 
@@ -152,6 +153,7 @@ class Mouse {
      * @return {number} Clamped and integer rounded Y position of the mouse cursor.
      */
     getScratchY () {
+        if (!this.locked) return '-0';
         return this._scratchY;
     }
 
