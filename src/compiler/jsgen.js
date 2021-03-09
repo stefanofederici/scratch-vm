@@ -161,7 +161,15 @@ class ConstantInput {
     }
 
     isAlwaysNumber () {
-        return !Number.isNaN(+this.constantValue);
+        const value = +this.constantValue;
+        if (Number.isNaN(value)) {
+            return false;
+        }
+        // Empty strings evaluate to 0 but should not be considered a number.
+        if (value === 0) {
+            return this.constantValue.toString().trim() !== '';
+        }
+        return true;
     }
 
     isNeverNumber () {
@@ -691,16 +699,16 @@ class JSGenerator {
             }
             break;
         case 'control.wait': {
-            const timer = this.localVariables.next();
             const duration = this.localVariables.next();
-            this.source += `var ${timer} = timer();\n`;
+            this.source += `thread.timer = timer();\n`;
             this.source += `var ${duration} = Math.max(0, 1000 * ${this.descendInput(node.seconds).asNumber()});\n`;
             this.requestRedraw();
             // always yield at least once, even on 0 second durations
             this.yieldNotWarp();
-            this.source += `while (${timer}.timeElapsed() < ${duration}) {\n`;
+            this.source += `while (thread.timer.timeElapsed() < ${duration}) {\n`;
             this.yieldNotWarpOrStuck();
             this.source += '}\n';
+            this.source += 'thread.timer = null;\n';
             break;
         }
         case 'control.waitUntil': {
@@ -781,6 +789,11 @@ class JSGenerator {
         case 'looks.clearEffects':
             this.source += 'target.clearEffects();\n';
             break;
+        case 'looks.changeEffect':
+            if (this.target.effects.hasOwnProperty(node.effect)) {
+                this.source += `target.setEffect("${sanitize(node.effect)}", runtime.ext_scratch3_looks.clampEffect("${sanitize(node.effect)}", ${this.descendInput(node.value).asNumber()} + target.effects["${sanitize(node.effect)}"]));\n`;
+            }
+            break;
         case 'looks.changeSize':
             this.source += `target.setSize(target.size + ${this.descendInput(node.size).asNumber()});\n`;
             break;
@@ -802,6 +815,11 @@ class JSGenerator {
             break;
         case 'looks.nextCostume':
             this.source += 'target.setCostume(target.currentCostume + 1);\n';
+            break;
+        case 'looks.setEffect':
+            if (this.target.effects.hasOwnProperty(node.effect)) {
+                this.source += `target.setEffect("${sanitize(node.effect)}", runtime.ext_scratch3_looks.clampEffect("${sanitize(node.effect)}", ${this.descendInput(node.value).asNumber()}));\n`;
+            }
             break;
         case 'looks.setSize':
             this.source += `target.setSize(${this.descendInput(node.size).asNumber()});\n`;
