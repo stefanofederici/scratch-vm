@@ -2179,9 +2179,8 @@ class Runtime extends EventEmitter {
      * inactive threads after each iteration.
      */
     _step () {
-        this.beforeStep();
-
         this.ioDevices.mouse.flushMovement();
+
         if (this.interpolationEnabled) {
             interpolate.setupInitialState(this);
         }
@@ -2260,16 +2259,6 @@ class Runtime extends EventEmitter {
         if (this.interpolationEnabled) {
             this._lastStepTime = Date.now();
         }
-
-        this.afterStep();
-    }
-
-    beforeStep () {
-
-    }
-
-    afterStep () {
-
     }
 
     /**
