@@ -455,9 +455,9 @@ class JSGenerator {
         case 'mouse.down':
             return new TypedInput('runtime.ioDevices.mouse.getIsDown()', TYPE_BOOLEAN);
         case 'mouse.x':
-            return new TypedInput('runtime.ioDevices.mouse.getScratchX()', TYPE_NUMBER);
+            return new TypedInput('runtime.ioDevices.mouse.getScratchX()', TYPE_UNKNOWN);
         case 'mouse.y':
-            return new TypedInput('runtime.ioDevices.mouse.getScratchY()', TYPE_NUMBER);
+            return new TypedInput('runtime.ioDevices.mouse.getScratchY()', TYPE_UNKNOWN);
 
         case 'op.abs':
             return new TypedInput(`Math.abs(${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER);
