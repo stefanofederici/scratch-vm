@@ -357,6 +357,8 @@ class JSGenerator {
         this.localVariables = new VariablePool('a');
         this._setupVariablesPool = new VariablePool('b');
         this._setupVariables = {};
+
+        this.descendedIntoModulo = false;
     }
 
     /**
@@ -550,6 +552,7 @@ class JSGenerator {
             // Needs to be marked as NaN because Math.log(-1) == NaN
             return new TypedInput(`(Math.log(${this.descendInput(node.value).asNumber()}) / Math.LN10)`, TYPE_NUMBER_NAN);
         case 'op.mod':
+            this.descendedIntoModulo = true;
             // Needs to be marked as NaN because mod(0, 0) (and others) == NaN
             return new TypedInput(`mod(${this.descendInput(node.left).asNumber()}, ${this.descendInput(node.right).asNumber()})`, TYPE_NUMBER_NAN);
         case 'op.multiply':
@@ -644,6 +647,10 @@ class JSGenerator {
             break;
         }
 
+        case 'control.allAtOnce':
+            // Scratch 3 behavior is to treat this as essentially `if (true) {`
+            this.descendStack(node.do, new Frame(false));
+            break;
         case 'control.createClone':
             this.source += `runtime.ext_scratch3_control._createClone(${this.descendInput(node.target).asString()}, target);\n`;
             break;
@@ -845,8 +852,9 @@ class JSGenerator {
             this.source += `target.setRotationStyle("${sanitize(node.style)}");\n`;
             break;
         case 'motion.setXY':
+            this.descendedIntoModulo = false;
             this.source += `target.setXY(${this.descendInput(node.x).asNumber()}, ${this.descendInput(node.y).asNumber()});\n`;
-            if (node.x.kind === 'op.mod' || node.y.kind === 'op.mod') {
+            if (this.descendedIntoModulo) {
                 this.source += `if (target.interpolationData) target.interpolationData = null;\n`;
             }
             break;

@@ -399,7 +399,9 @@ class Runtime extends EventEmitter {
         this.stageHeight = Runtime.STAGE_HEIGHT;
 
         this.runtimeOptions = {
-            maxClones: Runtime.MAX_CLONES
+            maxClones: Runtime.MAX_CLONES,
+            effectLimits: true,
+            fencing: true
         };
 
         this.compilerOptions = {
