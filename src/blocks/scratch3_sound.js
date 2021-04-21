@@ -275,13 +275,17 @@ class Scratch3SoundBlocks {
             soundState.effects[effect] = value;
         }
 
-        if (util.sequencer.runtime.runtimeOptions.effectLimits) {
+        const miscLimits = this.runtime.runtimeOptions.miscLimits;
+        if (miscLimits) {
             const {min, max} = Scratch3SoundBlocks.EFFECT_RANGE[effect];
             soundState.effects[effect] = MathUtil.clamp(soundState.effects[effect], min, max);
         }
 
         this._syncEffectsForTarget(util.target);
-
+        if (miscLimits) {
+            // Yield until the next tick.
+            return Promise.resolve();
+        }
         this.runtime.requestRedraw();
     }
 
@@ -328,6 +332,10 @@ class Scratch3SoundBlocks {
         util.target.volume = volume;
         this._syncEffectsForTarget(util.target);
 
+        if (this.runtime.runtimeOptions.miscLimits) {
+            // Yield until the next tick.
+            return Promise.resolve();
+        }
         this.runtime.requestRedraw();
     }
 

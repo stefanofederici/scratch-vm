@@ -172,6 +172,14 @@ let stepThreadsProfilerId = -1;
  */
 let rendererDrawProfilerId = -1;
 
+// Use setTimeout to polyfill requestAnimationFrame in Node environments
+const _requestAnimationFrame = typeof requestAnimationFrame === 'function' ?
+    requestAnimationFrame :
+    (f => setTimeout(f, 1000 / 60));
+const _cancelAnimationFrame = typeof requestAnimationFrame === 'function' ?
+    cancelAnimationFrame :
+    clearTimeout;
+
 /**
  * Manages targets, scripts, and the sequencer.
  * @constructor
@@ -400,7 +408,7 @@ class Runtime extends EventEmitter {
 
         this.runtimeOptions = {
             maxClones: Runtime.MAX_CLONES,
-            effectLimits: true,
+            miscLimits: true,
             fencing: true
         };
 
@@ -408,6 +416,8 @@ class Runtime extends EventEmitter {
             enabled: true,
             warpTimer: false
         };
+
+        this.debug = false;
 
         this._animationFrame = this._animationFrame.bind(this);
         this._animationFrameId = null;
@@ -1673,14 +1683,6 @@ class Runtime extends EventEmitter {
     }
 
     /**
-     * Set the svg adapter, which converts scratch 2 svgs to scratch 3 svgs
-     * @param {!SvgRenderer} svgAdapter The adapter to attach
-     */
-    attachV2SVGAdapter (svgAdapter) {
-        this.v2SvgAdapter = svgAdapter;
-    }
-
-    /**
      * Set the bitmap adapter for the VM/runtime, which converts scratch 2
      * bitmaps to scratch 3 bitmaps. (Scratch 3 bitmaps are all bitmap resolution 2)
      * @param {!function} bitmapAdapter The adapter to attach
@@ -2162,7 +2164,7 @@ class Runtime extends EventEmitter {
     }
 
     _animationFrame () {
-        this._animationFrameId = requestAnimationFrame(this._animationFrame);
+        this._animationFrameId = _requestAnimationFrame(this._animationFrame);
 
         const frameStarted = this._lastStepTime;
         const now = Date.now();
@@ -2319,9 +2321,9 @@ class Runtime extends EventEmitter {
      * @param {number} framerate Target frames per second
      */
     setFramerate (framerate) {
-        // Setting framerate to anything greater than this is
-        // unnecessary and tricks the sequencer into thinking it has almost no work time.
-        if (framerate > 1000) framerate = 1000;
+        // Setting framerate to anything greater than this is unnecessary and can break the sequencer
+        // Additonally, the JS spec says intervals can't run more than once every 4ms anyways
+        if (framerate > 250) framerate = 250;
         this.framerate = framerate;
         if (this._steppingInterval) {
             clearInterval(this._steppingInterval);
@@ -2387,6 +2389,11 @@ class Runtime extends EventEmitter {
                 thread.tryCompile();
             }
         });
+    }
+
+    enableDebug () {
+        this.resetAllCaches();
+        this.debug = true;
     }
 
     /**
@@ -2816,7 +2823,7 @@ class Runtime extends EventEmitter {
         if (this._steppingInterval) return;
 
         if (this.interpolationEnabled) {
-            this._animationFrameId = requestAnimationFrame(this._animationFrame);
+            this._animationFrameId = _requestAnimationFrame(this._animationFrame);
         }
 
         const interval = 1000 / this.framerate;
@@ -2840,7 +2847,7 @@ class Runtime extends EventEmitter {
 
         // tw: also cancel the animation frame loop
         if (this._animationFrameId !== null) {
-            cancelAnimationFrame(this._animationFrameId);
+            _cancelAnimationFrame(this._animationFrameId);
             this._animationFrameId = null;
         }
 
