@@ -210,6 +210,8 @@ class Runtime extends EventEmitter {
          */
         this.threads = [];
 
+        this.threadMap = new Map();
+
         /** @type {!Sequencer} */
         this.sequencer = new Sequencer(this);
 
@@ -1725,6 +1727,9 @@ class Runtime extends EventEmitter {
 
         thread.pushStack(id);
         this.threads.push(thread);
+        if (!thread.stackClick) {
+            this.threadMap.set(Thread.getId(target, id), thread);
+        }
 
         // tw: compile new threads. Do not attempt to compile monitor threads.
         if (!(opts && opts.updateMonitor) && this.compilerOptions.enabled) {
@@ -1769,6 +1774,9 @@ class Runtime extends EventEmitter {
             return newThread;
         }
         this.threads.push(thread);
+        if (!newThread.stackClick) {
+            this.threadMap.set(Thread.getId(newThread.target, newThread.topBlock), newThread);
+        }
         return thread;
     }
 
@@ -1939,14 +1947,10 @@ class Runtime extends EventEmitter {
             if (hatMeta.restartExistingThreads) {
                 // If `restartExistingThreads` is true, we should stop
                 // any existing threads starting with the top block.
-                for (let i = 0; i < startingThreadListLength; i++) {
-                    if (this.threads[i].target === target &&
-                        this.threads[i].topBlock === topBlockId &&
-                        // stack click threads and hat threads can coexist
-                        !this.threads[i].stackClick) {
-                        newThreads.push(this._restartThread(this.threads[i]));
-                        return;
-                    }
+                const existingThread = this.threadMap[Thread.getId(target, topBlockId)];
+                if (existingThread) {
+                    newThreads.push(this._restartThread(existingThread));
+                    return;
                 }
             } else {
                 // If `restartExistingThreads` is false, we should
@@ -2164,6 +2168,7 @@ class Runtime extends EventEmitter {
         }
         // Remove all remaining threads from executing in the next tick.
         this.threads = [];
+        this.threadMap.clear();
     }
 
     _animationFrame () {
@@ -2199,6 +2204,12 @@ class Runtime extends EventEmitter {
 
         // Clean up threads that were told to stop during or since the last step
         this.threads = this.threads.filter(thread => !thread.isKilled);
+
+        for (const [id, thread] of this.threadMap.entries()) {
+            if (thread.status === Thread.STATUS_DONE || thread.isKilled) {
+                this.threadMap.delete(id);
+            }
+        }
 
         // Find all edge-activated hats, and add them to threads to be evaluated.
         for (const hatType in this._hats) {
