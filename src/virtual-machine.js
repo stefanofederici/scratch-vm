@@ -537,11 +537,12 @@ class VirtualMachine extends EventEmitter {
 
     /**
      * Export project as a Scratch 3.0 JSON representation.
+     * @param {*} serializationOptions Options to pass to the serializer
      * @return {string} Serialized state of the runtime.
      */
-    toJSON () {
+    toJSON (serializationOptions) {
         const sb3 = require('./serialization/sb3');
-        return StringUtil.stringify(sb3.serialize(this.runtime));
+        return StringUtil.stringify(sb3.serialize(this.runtime, null, serializationOptions));
     }
 
     // TODO do we still need this function? Keeping it here so as not to introduce

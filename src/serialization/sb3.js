@@ -16,6 +16,7 @@ const uid = require('../util/uid');
 const MathUtil = require('../util/math-util');
 const StringUtil = require('../util/string-util');
 const VariableUtil = require('../util/variable-util');
+const optimize = require('./tw-optimize-sb3');
 
 const {loadCostume} = require('../import/load-costume.js');
 const {loadSound} = require('../import/load-sound.js');
@@ -503,7 +504,7 @@ const serializeMonitors = function (monitors, runtime) {
             opcode: monitorData.opcode,
             params: monitorData.params,
             spriteName: monitorData.spriteName,
-            value: monitorData.value,
+            value: Array.isArray(monitorData.value) ? [] : 0,
             width: monitorData.width,
             height: monitorData.height,
             x: monitorData.x - xOffset,
@@ -525,7 +526,7 @@ const serializeMonitors = function (monitors, runtime) {
  * @param {string=} targetId Optional target id if serializing only a single target
  * @return {object} Serialized runtime instance.
  */
-const serialize = function (runtime, targetId) {
+const serialize = function (runtime, targetId, {allowOptimization = true} = {}) {
     // Fetch targets
     const obj = Object.create(null);
     // Create extension set to hold extension ids found while serializing targets
@@ -571,6 +572,11 @@ const serialize = function (runtime, targetId) {
 
     // Assemble payload and return
     obj.meta = meta;
+
+    if (allowOptimization) {
+        optimize(obj);
+    }
+
     return obj;
 };
 
