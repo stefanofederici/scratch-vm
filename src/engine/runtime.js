@@ -1723,12 +1723,14 @@ class Runtime extends EventEmitter {
             this.monitorBlocks :
             target.blocks;
 
-        thread.pushStack(id);
         this.threads.push(thread);
 
         // tw: compile new threads. Do not attempt to compile monitor threads.
         if (!(opts && opts.updateMonitor) && this.compilerOptions.enabled) {
             thread.tryCompile();
+        }
+        if (!thread.isCompiled) {
+            thread.pushStack(id);
         }
 
         return thread;

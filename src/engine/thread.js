@@ -424,6 +424,15 @@ class Thread {
         return false;
     }
 
+    setupCompiledStackFrame () {
+        const warp = this.warp > 0;
+        if (this.stackFrames.length === 0) {
+            this.stackFrames.push(_StackFrame.create(warp));
+        } else {
+            this.stackFrames[0].reuse(warp);
+        }
+    }
+
     /**
      * Attempt to compile this thread.
      */
@@ -474,6 +483,8 @@ class Thread {
         }
 
         this.isCompiled = true;
+
+        this.stack.push(0);
     }
 }
 
