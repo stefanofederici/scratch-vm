@@ -336,6 +336,8 @@ class Runtime extends EventEmitter {
          */
         this.redrawRequested = false;
 
+        this.extensions = {};
+
         // Register all given block packages.
         this._registerBlockPackages();
 
@@ -871,7 +873,7 @@ class Runtime extends EventEmitter {
     }
 
     compilerRegisterExtension (name, extensionObject) {
-        this[`ext_${name}`] = extensionObject;
+        this.extensions[name] = extensionObject;
     }
 
     getMonitorState () {

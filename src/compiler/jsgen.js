@@ -44,7 +44,7 @@ const TYPE_UNKNOWN = 4;
 const TYPE_NUMBER_NAN = 5;
 
 // Pen-related constants
-const PEN_EXT = 'runtime.ext_pen';
+const PEN_EXT = 'runtime.extensions.pen';
 const PEN_STATE = `${PEN_EXT}._getPenState(target)`;
 
 /**
@@ -587,7 +587,7 @@ class JSGenerator {
             if (node.useFloats) {
                 return new TypedInput(`randomFloat(${this.descendInput(node.low).asNumber()}, ${this.descendInput(node.high).asNumber()})`, TYPE_NUMBER);
             }
-            return new TypedInput(`runtime.ext_scratch3_operators._random(${this.descendInput(node.low).asUnknown()}, ${this.descendInput(node.high).asUnknown()})`, TYPE_NUMBER);
+            return new TypedInput(`runtime.extensions.scratch3_operators._random(${this.descendInput(node.low).asUnknown()}, ${this.descendInput(node.high).asUnknown()})`, TYPE_NUMBER);
         case 'op.round':
             return new TypedInput(`Math.round(${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER);
         case 'op.sin':
@@ -603,7 +603,7 @@ class JSGenerator {
             return new TypedInput(`(10 ** ${this.descendInput(node.value).asNumber()})`, TYPE_NUMBER);
 
         case 'sensing.answer':
-            return new TypedInput(`runtime.ext_scratch3_sensing._answer`, TYPE_STRING);
+            return new TypedInput(`runtime.extensions.scratch3_sensing._answer`, TYPE_STRING);
         case 'sensing.colorTouchingColor':
             return new TypedInput(`target.colorIsTouchingColor(colorToList(${this.descendInput(node.target).asUnknown()}), colorToList(${this.descendInput(node.mask).asUnknown()}))`, TYPE_BOOLEAN);
         case 'sensing.date':
@@ -622,7 +622,7 @@ class JSGenerator {
         case 'sensing.month':
             return new TypedInput(`(new Date().getMonth() + 1)`, TYPE_NUMBER);
         case 'sensing.of':
-            return new TypedInput(`runtime.ext_scratch3_sensing.getAttributeOf({OBJECT: ${this.descendInput(node.object).asString()}, PROPERTY: "${sanitize(node.property)}" })`, TYPE_UNKNOWN);
+            return new TypedInput(`runtime.extensions.scratch3_sensing.getAttributeOf({OBJECT: ${this.descendInput(node.object).asString()}, PROPERTY: "${sanitize(node.property)}" })`, TYPE_UNKNOWN);
         case 'sensing.second':
             return new TypedInput(`(new Date().getSeconds())`, TYPE_NUMBER);
         case 'sensing.touching':
@@ -666,7 +666,7 @@ class JSGenerator {
         }
 
         case 'control.createClone':
-            this.source += `runtime.ext_scratch3_control._createClone(${this.descendInput(node.target).asString()}, target);\n`;
+            this.source += `runtime.extensions.scratch3_control._createClone(${this.descendInput(node.target).asString()}, target);\n`;
             break;
         case 'control.deleteClone':
             this.source += 'if (!target.isOriginal) {\n';
@@ -814,7 +814,7 @@ class JSGenerator {
             break;
         case 'looks.changeEffect':
             if (this.target.effects.hasOwnProperty(node.effect)) {
-                this.source += `target.setEffect("${sanitize(node.effect)}", runtime.ext_scratch3_looks.clampEffect("${sanitize(node.effect)}", ${this.descendInput(node.value).asNumber()} + target.effects["${sanitize(node.effect)}"]));\n`;
+                this.source += `target.setEffect("${sanitize(node.effect)}", runtime.extensions.scratch3_looks.clampEffect("${sanitize(node.effect)}", ${this.descendInput(node.value).asNumber()} + target.effects["${sanitize(node.effect)}"]));\n`;
             }
             break;
         case 'looks.changeSize':
@@ -831,17 +831,17 @@ class JSGenerator {
             break;
         case 'looks.hide':
             this.source += 'target.setVisible(false);\n';
-            this.source += 'runtime.ext_scratch3_looks._renderBubble(target);\n';
+            this.source += 'runtime.extensions.scratch3_looks._renderBubble(target);\n';
             break;
         case 'looks.nextBackdrop':
-            this.source += 'runtime.ext_scratch3_looks._setBackdrop(stage, stage.currentCostume + 1, true);\n';
+            this.source += 'runtime.extensions.scratch3_looks._setBackdrop(stage, stage.currentCostume + 1, true);\n';
             break;
         case 'looks.nextCostume':
             this.source += 'target.setCostume(target.currentCostume + 1);\n';
             break;
         case 'looks.setEffect':
             if (this.target.effects.hasOwnProperty(node.effect)) {
-                this.source += `target.setEffect("${sanitize(node.effect)}", runtime.ext_scratch3_looks.clampEffect("${sanitize(node.effect)}", ${this.descendInput(node.value).asNumber()}));\n`;
+                this.source += `target.setEffect("${sanitize(node.effect)}", runtime.extensions.scratch3_looks.clampEffect("${sanitize(node.effect)}", ${this.descendInput(node.value).asNumber()}));\n`;
             }
             break;
         case 'looks.setSize':
@@ -849,17 +849,17 @@ class JSGenerator {
             break;
         case 'looks.show':
             this.source += 'target.setVisible(true);\n';
-            this.source += 'runtime.ext_scratch3_looks._renderBubble(target);\n';
+            this.source += 'runtime.extensions.scratch3_looks._renderBubble(target);\n';
             break;
         case 'looks.switchBackdrop':
-            this.source += `runtime.ext_scratch3_looks._setBackdrop(stage, ${this.descendInput(node.backdrop).asSafe()});\n`;
+            this.source += `runtime.extensions.scratch3_looks._setBackdrop(stage, ${this.descendInput(node.backdrop).asSafe()});\n`;
             break;
         case 'looks.switchCostume':
-            this.source += `runtime.ext_scratch3_looks._setCostume(target, ${this.descendInput(node.costume).asSafe()});\n`;
+            this.source += `runtime.extensions.scratch3_looks._setCostume(target, ${this.descendInput(node.costume).asSafe()});\n`;
             break;
 
         case 'motion.ifOnEdgeBounce':
-            this.source += `runtime.ext_scratch3_motion._ifOnEdgeBounce(target);\n`;
+            this.source += `runtime.extensions.scratch3_motion._ifOnEdgeBounce(target);\n`;
             break;
         case 'motion.setDirection':
             this.source += `target.setDirection(${this.descendInput(node.direction).asNumber()});\n`;
@@ -875,7 +875,7 @@ class JSGenerator {
             }
             break;
         case 'motion.step':
-            this.source += `runtime.ext_scratch3_motion._moveSteps(${this.descendInput(node.steps).asNumber()}, target);\n`;
+            this.source += `runtime.extensions.scratch3_motion._moveSteps(${this.descendInput(node.steps).asNumber()}, target);\n`;
             break;
 
         case 'noop':

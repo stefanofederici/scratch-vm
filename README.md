@@ -112,8 +112,8 @@ function factory0 (target) {
 
     for (var a0 = 100; a0 >= 0.5; a0--) {
       b0.value = ((+b0.value || 0) + 1);
-      runtime.ext_scratch3_motion._moveSteps(b0.value, target);
-      runtime.ext_scratch3_motion._ifOnEdgeBounce(target);
+      runtime.extensions.scratch3_motion._moveSteps(b0.value, target);
+      runtime.extensions.scratch3_motion._ifOnEdgeBounce(target);
 
       if (thread.warp === 0) yield;
     }
@@ -159,11 +159,11 @@ This is really just a regular for loop that will repeat 100 times. The loop inde
 
 Changes `b0.value` by 1. `(+b0.value || 0)` converts the value of `b0.value` to a number (in Scratch, NaN becomes 0). This is necessary because the compiler can't statically determine that `b0.value` will always evaluate to a number. Why can't it, even when `b0.value` was just set to the number 0 earlier? Because the script may have yielded control and another script may have changed the type of the variable, as you'll see later. If the variable changes to the string "10" and the script does not perform this conversion, then you would get `"10" + 1` which evaluates to the string "101", not the number 11.
 
-`runtime.ext_scratch3_motion._moveSteps(b0.value, target);`
+`runtime.extensions.scratch3_motion._moveSteps(b0.value, target);`
 
 Accesses the `scratch3_motion` extension through the runtime factory variable and calls `_moveSteps` with `b0.value` (distance to move) and `target` (the target to operate on).
 
-`runtime.ext_scratch3_motion._ifOnEdgeBounce(target);`
+`runtime.extensions.scratch3_motion._ifOnEdgeBounce(target);`
 
 Similar to the above, it runs the "if on edge, bounce" block on the current target.
 
