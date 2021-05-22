@@ -1,3 +1,19 @@
+/**
+ * Copyright (C) 2021 Thomas Weber
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 const Thread = require('../engine/thread');
 const Timer = require('../util/timer');
 const Cast = require('../util/cast');
@@ -31,9 +47,9 @@ let stuckCounter = 0;
  * @returns {boolean} true if the current tick is likely stuck.
  */
 const isStuck = () => {
-    // The real time is not checked on every call for performance, as can be a very hot function.
+    // The real time is not checked on every call for performance.
     stuckCounter++;
-    if (stuckCounter === 10) {
+    if (stuckCounter === 100) {
         stuckCounter = 0;
         return thread.target.runtime.sequencer.timer.timeElapsed() > 500;
     }
@@ -115,13 +131,16 @@ const waitPromise = function*(promise) {
     return returnValue;
 };
 
+let hasResumedFromPromise = false;
+
 /**
  * Execute a scratch-vm primitive.
  * @param {*} inputs The inputs to pass to the block.
  * @param {function} blockFunction The primitive's function.
+ * @param {boolean} useFlags Whether to set flags (hasResumedFromPromise)
  * @returns {*} the value returned by the block, if any.
  */
-const executeInCompatibilityLayer = function*(inputs, blockFunction) {
+const executeInCompatibilityLayer = function*(inputs, blockFunction, useFlags) {
     // reset the stackframe
     // we only ever use one stackframe at a time, so this shouldn't cause issues
     thread.stackFrames[thread.stackFrames.length - 1].reuse(thread.warp > 0);
@@ -142,7 +161,11 @@ const executeInCompatibilityLayer = function*(inputs, blockFunction) {
     let returnValue = executeBlock();
 
     if (isPromise(returnValue)) {
-        return yield* waitPromise(returnValue);
+        returnValue = yield* waitPromise(returnValue);
+        if (useFlags) {
+            hasResumedFromPromise = true;
+        }
+        return returnValue;
     }
 
     while (thread.status === Thread.STATUS_YIELD || thread.status === Thread.STATUS_YIELD_TICK) {
@@ -161,7 +184,11 @@ const executeInCompatibilityLayer = function*(inputs, blockFunction) {
         returnValue = executeBlock();
 
         if (isPromise(returnValue)) {
-            return yield* waitPromise(returnValue);
+            returnValue = yield* waitPromise(returnValue);
+            if (useFlags) {
+                hasResumedFromPromise = true;
+            }
+            return returnValue;
         }
     }
 
@@ -303,21 +330,14 @@ const timer = () => {
     return t;
 };
 
-// This is the "epoch" for the daysSince2000() function.
-// Storing this in a variable is faster than constantly recreating it.
-const daysSince2000Epoch = new Date(2000, 0, 1);
-
 /**
  * Returns the amount of days since January 1st, 2000.
  * @returns {number} Days since 2000.
  */
-const daysSince2000 = () => {
-    const today = new Date();
-    const dstAdjust = today.getTimezoneOffset() - daysSince2000Epoch.getTimezoneOffset();
-    let mSecsSinceStart = today.valueOf() - daysSince2000Epoch.valueOf();
-    mSecsSinceStart += ((today.getTimezoneOffset() - dstAdjust) * 60 * 1000);
-    return mSecsSinceStart / (24 * 60 * 60 * 1000);
-};
+const daysSince2000 = () =>
+    // Date.UTC(2000, 0, 1) === 946684800000
+    // Hardcoding it is marginally faster
+    (Date.now() - 946684800000) / (24 * 60 * 60 * 1000);
 
 /**
  * Determine distance to a sprite or point.

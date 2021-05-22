@@ -1,19 +1,33 @@
 /**
+ * Copyright (C) 2021 Thomas Weber
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/**
  * @fileoverview List of blocks to be supported in the compiler compatibility layer.
+ * This is only for native blocks. Extensions should not be listed here.
  */
 
 // Please keep these lists alphabetical.
 
 const stacked = [
     'control_clear_counter',
-    'control_get_counter',
     'control_incr_counter',
-    'looks_changeeffectby',
-    'looks_nextbackdrop',
-    'looks_nextcostume',
+    'looks_changestretchby',
     'looks_say',
     'looks_sayforsecs',
-    'looks_seteffectto',
+    'looks_setstretchto',
     'looks_switchbackdroptoandwait',
     'looks_think',
     'looks_thinkforsecs',
@@ -21,13 +35,6 @@ const stacked = [
     'motion_glideto',
     'motion_goto',
     'motion_pointtowards',
-    'music_changeTempo',
-    'music_midiSetInstrument',
-    'music_playDrumForBeats',
-    'music_playNoteForBeats',
-    'music_restForBeats',
-    'music_setInstrument',
-    'music_setTempo',
     'sensing_askandwait',
     'sensing_setdragmode',
     'sound_changeeffectby',
@@ -37,23 +44,14 @@ const stacked = [
     'sound_playuntildone',
     'sound_seteffectto',
     'sound_setvolumeto',
-    'sound_stopallsounds',
-    'text2speech_setLanguage',
-    'text2speech_setVoice',
-    'text2speech_speakAndWait',
-    'videoSensing_setVideoTransparency',
-    'videoSensing_videoToggle'
+    'sound_stopallsounds'
 ];
 
 const inputs = [
     'control_get_counter',
-    'music_getTempo',
     'sensing_loud',
     'sensing_loudness',
-    'sound_volume',
-    'translate_getTranslate',
-    'translate_getViewerLanguage',
-    'videoSensing_videoOn'
+    'sound_volume'
 ];
 
 module.exports = {

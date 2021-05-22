@@ -19,6 +19,7 @@ const formatMessage = require('format-message');
 
 const Variable = require('./engine/variable');
 const newBlockIds = require('./util/new-block-ids');
+const ExtendedJSON = require('./tw-extended-json');
 
 const {loadCostume} = require('./import/load-costume.js');
 const {loadSound} = require('./import/load-sound.js');
@@ -38,6 +39,11 @@ const CORE_EXTENSIONS = [
     // 'variables',
     // 'myBlocks'
 ];
+
+// Disable missing translation warnings in console
+formatMessage.setup({
+    missingTranslation: 'ignore'
+});
 
 /**
  * Handles connections between blocks, stage, and extensions.
@@ -166,6 +172,9 @@ class VirtualMachine extends EventEmitter {
         this.runtime.on(Runtime.FRAMERATE_CHANGED, framerate => {
             this.emit(Runtime.FRAMERATE_CHANGED, framerate);
         });
+        this.runtime.on(Runtime.INTERPOLATION_CHANGED, framerate => {
+            this.emit(Runtime.INTERPOLATION_CHANGED, framerate);
+        });
         this.runtime.on(Runtime.COMPILE_ERROR, (target, error) => {
             this.emit(Runtime.COMPILE_ERROR, target, error);
         });
@@ -232,12 +241,27 @@ class VirtualMachine extends EventEmitter {
         this.runtime.setFramerate(framerate);
     }
 
+    setInterpolation (interpolationEnabled) {
+        this.runtime.setInterpolation(interpolationEnabled);
+    }
+
     setRuntimeOptions (runtimeOptions) {
         this.runtime.setRuntimeOptions(runtimeOptions);
     }
 
     setCompilerOptions (compilerOptions) {
         this.runtime.setCompilerOptions(compilerOptions);
+    }
+
+    storeProjectOptions () {
+        this.runtime.storeProjectOptions();
+        if (this.editingTarget.isStage) {
+            this.emitWorkspaceUpdate();
+        }
+    }
+
+    enableDebug () {
+        this.runtime.enableDebug();
     }
 
     /**
@@ -357,7 +381,7 @@ class VirtualMachine extends EventEmitter {
                         return reject(error);
                     }
                     if (typeof input !== 'string') input = new TextDecoder().decode(input);
-                    input = require('./tw-extended-json')(input);
+                    input = ExtendedJSON.parse(input);
                     input = JSON.stringify(input);
                     return validate(input, false, (error2, res2) => {
                         if (error2) return reject(error);
@@ -442,7 +466,30 @@ class VirtualMachine extends EventEmitter {
             compressionOptions: {
                 level: 6 // Tradeoff between best speed (1) and best compression (9)
             }
+        }).then(result => {
+            // tw: We want to let the GUI know whether this project uses block that won't work in Scratch.
+            result.usesExtendedExtensions = JSON.parse(projectJson).extensions.includes('tw');
+            return result;
         });
+    }
+
+    /**
+     * tw: Serailize the project into a map of files without actually zipping the project.
+     * @returns {Record<Uint8Array>} Files of the project.
+     */
+    saveProjectSb3DontZip () {
+        const soundDescs = serializeSounds(this.runtime);
+        const costumeDescs = serializeCostumes(this.runtime);
+        const projectJson = this.toJSON();
+
+        const files = {
+            'project.json': new _TextEncoder().encode(projectJson)
+        };
+        for (const fileDesc of soundDescs.concat(costumeDescs)) {
+            files[fileDesc.fileName] = fileDesc.fileContent;
+        }
+
+        return files;
     }
 
     /*
@@ -498,11 +545,12 @@ class VirtualMachine extends EventEmitter {
 
     /**
      * Export project as a Scratch 3.0 JSON representation.
+     * @param {*} serializationOptions Options to pass to the serializer
      * @return {string} Serialized state of the runtime.
      */
-    toJSON () {
+    toJSON (serializationOptions) {
         const sb3 = require('./serialization/sb3');
-        return StringUtil.stringify(sb3.serialize(this.runtime));
+        return StringUtil.stringify(sb3.serialize(this.runtime, null, serializationOptions));
     }
 
     // TODO do we still need this function? Keeping it here so as not to introduce
@@ -587,6 +635,10 @@ class VirtualMachine extends EventEmitter {
 
             if (!wholeProject) {
                 this.editingTarget.fixUpVariableReferences();
+            }
+
+            if (wholeProject) {
+                this.runtime.parseProjectOptions();
             }
 
             // Update the VM user's knowledge of targets and blocks on the workspace.
@@ -1139,12 +1191,8 @@ class VirtualMachine extends EventEmitter {
         return this.runtime && this.runtime.renderer;
     }
 
-    /**
-     * Set the svg adapter for the VM/runtime, which converts scratch 2 svgs to scratch 3 svgs
-     * @param {!SvgRenderer} svgAdapter The adapter to attach
-     */
-    attachV2SVGAdapter (svgAdapter) {
-        this.runtime.attachV2SVGAdapter(svgAdapter);
+    // @deprecated
+    attachV2SVGAdapter () {
     }
 
     /**

@@ -23,7 +23,9 @@ const builtinExtensions = {
     ev3: () => require('../extensions/scratch3_ev3'),
     makeymakey: () => require('../extensions/scratch3_makeymakey'),
     boost: () => require('../extensions/scratch3_boost'),
-    gdxfor: () => require('../extensions/scratch3_gdx_for')
+    gdxfor: () => require('../extensions/scratch3_gdx_for'),
+    // tw: core extension
+    tw: () => require('../extensions/tw')
 };
 
 /**
@@ -132,6 +134,7 @@ class ExtensionManager {
         const extensionInstance = new extension(this.runtime);
         const serviceName = this._registerInternalExtension(extensionInstance);
         this._loadedExtensions.set(extensionId, serviceName);
+        this.runtime.compilerRegisterExtension(extensionId, extensionInstance);
     }
 
     /**
@@ -156,9 +159,19 @@ class ExtensionManager {
             return Promise.resolve();
         }
 
+        try {
+            const parsedUrl = new URL(extensionURL);
+            if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+                return Promise.reject(new Error('Invalid protocol'));
+            }
+        } catch (e) {
+            extensionURL = `//${extensionURL}`;
+        }
+
         return new Promise((resolve, reject) => {
             // If we `require` this at the global level it breaks non-webpack targets, including tests
-            const ExtensionWorker = require('worker-loader?name=extension-worker.js!./extension-worker');
+            // eslint-disable-next-line max-len
+            const ExtensionWorker = require('worker-loader?name=js/extension-worker/extension-worker.[hash].js!./extension-worker');
 
             this.pendingExtensions.push({extensionURL, resolve, reject});
             dispatch.addWorker(new ExtensionWorker());
@@ -205,6 +218,7 @@ class ExtensionManager {
      */
     registerExtensionService (serviceName) {
         dispatch.call(serviceName, 'getInfo').then(info => {
+            this._loadedExtensions.set(info.id, serviceName);
             this._registerExtensionInfo(serviceName, info);
         });
     }

@@ -1,7 +1,6 @@
-// Imported from https://github.com/forkphorus/forkphorus/blob/master/src/json.ts
-// Intended as a temporary fix for https://github.com/LLK/scratch-parser/issues/60
-
 /* eslint-disable no-constant-condition */
+
+// ExtendedJSON is a superset of JSON that supports certain non-standard things such as Infinity
 
 class JSONParser {
     constructor (source) {
@@ -47,6 +46,9 @@ class JSONParser {
         this.next();
     }
     peek (length = 1, offset = 1) {
+        if (this.index + offset + length > this.source.length) {
+            return '';
+        }
         if (length === 1) {
             return this.charAt(this.index + offset);
         }
@@ -109,12 +111,6 @@ class JSONParser {
             }
             return Infinity;
         }
-        if (this.peek(9, 0) === '-Infinity') {
-            for (let i = 0; i < 9; i++) {
-                this.next();
-            }
-            return -Infinity;
-        }
         if (this.peek(3, 0) === 'NaN') {
             for (let i = 0; i < 3; i++) {
                 this.next();
@@ -124,10 +120,17 @@ class JSONParser {
         this.error(`Unknown word (starts with ${this.char()})`);
     }
     parseNumber () {
+        // Non-standard extension
+        if (this.peek(9, 0) === '-Infinity') {
+            for (let i = 0; i < 9; i++) {
+                this.next();
+            }
+            return -Infinity;
+        }
         let number = '';
         while (true) {
             number += this.char();
-            if (/[\d\.e+-]/i.test(this.peek())) {
+            if (/[\d.e+-]/i.test(this.peek())) {
                 this.next();
             } else {
                 break;
@@ -180,11 +183,11 @@ class JSONParser {
                     let hexString = '';
                     for (let i = 0; i < 4; i++) {
                         this.next();
-                        const char = this.char();
-                        if (!/[0-9a-f]/i.test(char)) {
-                            this.error(`Invalid hex code: ${char}`);
+                        const nextChar = this.char();
+                        if (!/[0-9a-f]/i.test(nextChar)) {
+                            this.error(`Invalid hex code: ${nextChar}`);
                         }
-                        hexString += char;
+                        hexString += nextChar;
                     }
                     const hexNumber = Number.parseInt(hexString, 16);
                     const letter = String.fromCharCode(hexNumber);
@@ -233,7 +236,7 @@ class JSONParser {
             this.next();
             return {};
         }
-        const result = Object.create(null);
+        const result = {};
         while (true) {
             this.skipWhitespace();
             const key = this.parseString();
@@ -257,4 +260,44 @@ const parse = source => {
     return parser.parse();
 };
 
-module.exports = parse;
+const stringify = object => {
+    if (typeof object === 'string') {
+        return JSON.stringify(object);
+    }
+    if (typeof object === 'number') {
+        if (Number.isNaN(object)) {
+            return '0';
+        }
+        // Difference from regular JSON: [-]Infinity will be sanitized as-is
+        return object.toString();
+    }
+    if (typeof object === 'boolean') {
+        return object.toString();
+    }
+    if (object === null) {
+        return 'null';
+    }
+    if (Array.isArray(object)) {
+        return `[${object.map(i => stringify(i)).join(',')}]`;
+    }
+    if (typeof object === 'object') {
+        let result = '{';
+        const keys = Object.keys(object);
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            const value = object[key];
+            result += `${JSON.stringify(key)}:${stringify(value)}`;
+            if (i !== keys.length - 1) {
+                result += ',';
+            }
+        }
+        result += '}';
+        return result;
+    }
+    throw new Error('Can not stringify');
+};
+
+module.exports = {
+    parse,
+    stringify
+};

@@ -4,6 +4,8 @@ class Mouse {
     constructor (runtime) {
         this._x = 0;
         this._y = 0;
+        this._buttons = new Set();
+        this.usesRightClickDown = false;
         this._isDown = false;
         /**
          * Reference to the owning Runtime.
@@ -60,20 +62,28 @@ class Mouse {
         if (data.x) {
             this._clientX = data.x;
             this._scratchX = Math.round(MathUtil.clamp(
-                480 * ((data.x / data.canvasWidth) - 0.5),
-                -240,
-                240
+                this.runtime.stageWidth * ((data.x / data.canvasWidth) - 0.5),
+                -(this.runtime.stageWidth / 2),
+                (this.runtime.stageWidth / 2)
             ));
         }
         if (data.y) {
             this._clientY = data.y;
             this._scratchY = Math.round(MathUtil.clamp(
-                -360 * ((data.y / data.canvasHeight) - 0.5),
-                -180,
-                180
+                -this.runtime.stageHeight * ((data.y / data.canvasHeight) - 0.5),
+                -(this.runtime.stageHeight / 2),
+                (this.runtime.stageHeight / 2)
             ));
         }
         if (typeof data.isDown !== 'undefined') {
+            // If no button specified, default to left button for compatibility
+            const button = typeof data.button === 'undefined' ? 0 : data.button;
+            if (data.isDown) {
+                this._buttons.add(button);
+            } else {
+                this._buttons.delete(button);
+            }
+
             const previousDownState = this._isDown;
             this._isDown = data.isDown;
 
@@ -139,6 +149,18 @@ class Mouse {
      */
     getIsDown () {
         return this._isDown;
+    }
+
+    /**
+     * tw: Get the down state of a specific button of the mouse.
+     * @param {number} button The ID of the button. 0 = left, 1 = middle, 2 = right
+     * @return {boolean} Is the mouse button down?
+     */
+    getButtonIsDown (button) {
+        if (button === 2) {
+            this.usesRightClickDown = true;
+        }
+        return this._buttons.has(button);
     }
 }
 

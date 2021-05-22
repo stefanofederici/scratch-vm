@@ -1,13 +1,35 @@
 /**
+ * Copyright (C) 2021 Thomas Weber
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/**
  * @fileoverview Common intermediates shared amongst parts of the compiler.
  */
 
 /**
  * An IntermediateScript describes a single script.
- * A script is anything with a hat -- "when green flag starts", a procedure definition, etc.
+ * Scripts do not necessarily have hats.
  */
 class IntermediateScript {
     constructor () {
+        /**
+         * The ID of the top block of this script.
+         * @type {string}
+         */
+        this.topBlockId = null;
+
         /**
          * List of nodes that make up this script.
          * @type {Array|null}

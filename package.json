@@ -3,13 +3,13 @@
   "version": "0.2.0",
   "description": "Virtual Machine for Scratch 3.0",
   "author": "Massachusetts Institute of Technology",
-  "license": "BSD-3-Clause",
+  "license": "GPL-3.0",
   "homepage": "https://github.com/LLK/scratch-vm#readme",
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/LLK/scratch-vm.git"
   },
-  "main": "./dist/node/scratch-vm.js",
+  "main": "./src/index.js",
   "browser": "./src/index.js",
   "scripts": {
     "build": "npm run docs && webpack --progress --colors --bail",
@@ -38,15 +38,17 @@
     "diff-match-patch": "1.0.4",
     "format-message": "6.2.1",
     "htmlparser2": "3.10.0",
-    "immutable": "3.8.1",
+    "immutable": "3.8.2",
     "jszip": "^3.1.5",
     "minilog": "3.1.0",
-    "nets": "3.2.0",
     "scratch-parser": "5.0.0",
     "scratch-sb1-converter": "0.2.7",
     "scratch-translate-extension-languages": "0.0.20191118205314",
     "text-encoding": "0.7.0",
     "worker-loader": "^1.1.1"
+  },
+  "peerDependencies": {
+    "scratch-svg-renderer": "^0.2.0-prerelease"
   },
   "devDependencies": {
     "@babel/core": "^7.1.2",
@@ -72,8 +74,9 @@
     "scratch-blocks": "latest",
     "scratch-l10n": "^3.1.20181129221712",
     "scratch-render": "latest",
+    "scratch-render-fonts": "^1.0.0-prerelease.20210401210003",
     "scratch-storage": "^1.1.0",
-    "scratch-svg-renderer": "latest",
+    "scratch-svg-renderer": "^0.2.0-prerelease.20210325225314",
     "script-loader": "0.7.2",
     "stats.js": "^0.17.0",
     "tap": "^12.0.1",
@@ -82,5 +85,6 @@
     "webpack": "^4.16.5",
     "webpack-cli": "^3.1.0",
     "webpack-dev-server": "^3.1.5"
-  }
+  },
+  "private": true
 }

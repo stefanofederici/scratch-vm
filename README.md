@@ -1,8 +1,8 @@
 ## TurboWarp/scratch-vm
 
-JIT compiler for Scratch projects.
+Modified Scratch VM with a JIT compiler and more features.
 
-The public API of TurboWarp/scratch-vm should be fully compatible with LLK/scratch-vm. See https://github.com/TurboWarp/scratch-vm/wiki/Public-API for more information.
+The public API of TurboWarp/scratch-vm should be compatible with LLK/scratch-vm. See "Public API" section below for more information.
 
 ## Setup
 
@@ -10,9 +10,71 @@ See https://github.com/TurboWarp/scratch-gui/wiki/Getting-Started to setup the c
 
 If you just want to play with the VM then it's the same process as upstream scratch-vm.
 
+## Public API
+
+Any public-facing API in LLK/scratch-vm *should* work just fine in TurboWarp/scratch-vm. Anything that doesn't is a bug. TurboWarp adds some new methods to the public API.
+
+### Runtime.setFramerate / VirtualMachine.setFramerate
+
+setCompatibilityMode is deprecated (but still works) in favor of a generic setFramerate method.
+
+```js
+runtime.setFramerate(60);
+```
+
+There is an event for framerate changes on Runtime and VirtualMachine: FRAMERATE_CHANGED (emitted with new framerate as only argument)
+
+### Runtime.setInterpolation / VirtualMachine.setInterpolation
+
+Toggles frame interpolation, an experimental feature that tries to make project motion smoother without changing the script tick rate.
+
+There is an event for changes on Runtime and VirtualMachine: INTERPOLATION_CHANGED
+
+### Runtime.setCompilerOptions / VirtualMachine.setCompilerOptions
+
+This lets you change the behavior of the compiler. This method takes an object with the following arguments:
+
+ - enabled (boolean; default true) - controls whether the JIT compiler is enabled
+ - warpTimer (boolean; default false) - controls whether to use a warp timer to limit how long warp scripts can run. Can have significant performance impact
+
+```js
+runtime.setCompilerOptions({
+  enabled: true,
+  warpTimer: true
+});
+// Partial updates are also supported -- this will only change `enabled` and not any other properties
+runtime.setCompilerOptions({ enabled: false });
+```
+
+There is an event for compiler option changes on Runtime and VirtualMachine: COMPILER_OPTIONS_CHANGED (called with current options)
+
+### Runtime.setRuntimeOptions / VirtualMachine.setRuntimeOptions
+
+Similar to setCompilerOption. This lets you control some behavior of the runtime.
+
+ - maxClones (number; default 300) - controls the clone limit; Infinity to disable
+ - miscLimits (boolean; default true) - controls various limits such as pitch, pan, etc.
+ - fencing (number; default true) - controls whether sprite fencing should be enabled
+
+There is an event for runtime option changes on Runtime and VirtualMachine: RUNTIME_OPTIONS_CHANGED (called with current options)
+
+### Runtime.stop / VirtualMachine.stop
+
+Stops the tick loop. This does not touch the active thread list. Anything currently active will be resumed when start is called again.
+
+There is an event for stop on Runtime and VirtualMachine: RUNTIME_STOPPED (similar to RUNTIME_STARTED)
+
+### Runtime.stageWidth / Runtime.stageHeight
+
+These control the width and height of the stage. Set them to values other than 480 and 360 respectively to get custom stage sizes. Keep in mind that you need to manually resize the renderer as well.
+
+### COMPILE_ERROR event
+
+A COMPILE_ERROR is fired on Runtime and VirtualMachine when a script couldn't be compiled.
+
 ## Extension authors
 
-The easiest way to make your extension compatible with TurboWarp is to use the same process as standard Scratch (https://github.com/LLK/scratch-vm/blob/develop/docs/extensions.md) to add your extension, and then add your opcodes to src/compiler/compat-blocks.js to make them run in the compatibility layer. Blocks that don't return values (eg. "move 10 steps") go in the `stacked` list and blocks that do return a value (eg. "3 * 3") go in the `inputs` list. Your opcodes are probably in the format `extensionId_methodName`.
+If you only use the standard reporter, boolean, and command block types, everything should just work without any changes.
 
 ## Compiler Overview
 
@@ -111,7 +173,7 @@ This is what makes JavaScript generator functions powerful: they can yield and r
 
 `retire();`
 
-This runs the runtime function `retire`. This function marks the current thread as finished so that it will not run again. There are many other runtime functions for lots of operations such as list replacements, insertions, gets, etc. These are defined in src/compiler/execute.js
+This runs the runtime function `retire`. This function marks the current thread as finished so that it will not run again. There are many other runtime functions for lots of operations such as list replacements, insertions, gets, etc. These are defined in src/compiler/jsexecute.js
 
 #### Procedures
 
@@ -129,6 +191,27 @@ The opcodes that this is used for are in src/engine/compat-blocks.js
 
 When scripts can't be compiled, they run in the standard (slow) scratch-vm interpreter. This is used for some edge cases: monitor threads, unknown opcodes, edge-activated hats, other errors.
 
+## License
+
+TurboWarp's modifications to Scratch are licensed under the GNU General Public License v3.0. See LICENSE or https://www.gnu.org/licenses/ for details.
+
+Original license for scratch-vm:
+
+```
+Copyright (c) 2016, Massachusetts Institute of Technology
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
 <!--
 
 ## scratch-vm
@@ -136,7 +219,6 @@ When scripts can't be compiled, they run in the standard (slow) scratch-vm inter
 
 [![Build Status](https://travis-ci.org/LLK/scratch-vm.svg?branch=develop)](https://travis-ci.org/LLK/scratch-vm)
 [![Coverage Status](https://coveralls.io/repos/github/LLK/scratch-vm/badge.svg?branch=develop)](https://coveralls.io/github/LLK/scratch-vm?branch=develop)
-[![Greenkeeper badge](https://badges.greenkeeper.io/LLK/scratch-vm.svg)](https://greenkeeper.io/)
 
 ## Installation
 This requires you to have Git and Node.js installed.

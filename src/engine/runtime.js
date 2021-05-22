@@ -17,6 +17,7 @@ const StageLayering = require('./stage-layering');
 const Variable = require('./variable');
 const xmlEscape = require('../util/xml-escape');
 const ScratchLinkWebSocket = require('../util/scratch-link-websocket');
+const ExtendedJSON = require('../tw-extended-json');
 
 // Virtual I/O devices.
 const Clock = require('../io/clock');
@@ -42,7 +43,11 @@ const defaultBlockPackages = {
     scratch3_procedures: require('../blocks/scratch3_procedures')
 };
 
+const interpolate = require('./tw-interpolate');
+
 const defaultExtensionColors = ['#0FBD8C', '#0DA57A', '#0B8E69'];
+
+const COMMENT_CONFIG_MAGIC = ' // _twconfig_';
 
 /**
  * Information used for converting Scratch argument types into scratch-blocks data.
@@ -169,6 +174,14 @@ let stepThreadsProfilerId = -1;
  * @type {number}
  */
 let rendererDrawProfilerId = -1;
+
+// Use setTimeout to polyfill requestAnimationFrame in Node environments
+const _requestAnimationFrame = typeof requestAnimationFrame === 'function' ?
+    requestAnimationFrame :
+    (f => setTimeout(f, 1000 / 60));
+const _cancelAnimationFrame = typeof requestAnimationFrame === 'function' ?
+    cancelAnimationFrame :
+    clearTimeout;
 
 /**
  * Manages targets, scripts, and the sequencer.
@@ -387,20 +400,39 @@ class Runtime extends EventEmitter {
          */
         this.removeCloudVariable = this._initializeRemoveCloudVariable(newCloudDataManager);
 
+        /**
+         * A string representing the origin of the current project from outside of the
+         * Scratch community, such as CSFirst.
+         * @type {?string}
+         */
+        this.origin = null;
+
         this._stageTarget = null;
 
         // 60 to match default of compatibility mode off
         // scratch-gui will set this to 30
         this.framerate = 60;
 
+        this.stageWidth = Runtime.STAGE_WIDTH;
+        this.stageHeight = Runtime.STAGE_HEIGHT;
+
         this.runtimeOptions = {
-            maxClones: Runtime.MAX_CLONES
+            maxClones: Runtime.MAX_CLONES,
+            miscLimits: true,
+            fencing: true
         };
 
         this.compilerOptions = {
             enabled: true,
             warpTimer: false
         };
+
+        this.debug = false;
+
+        this._animationFrame = this._animationFrame.bind(this);
+        this._animationFrameId = null;
+        this._lastStepTime = Date.now();
+        this.interpolationEnabled = false;
     }
 
     /**
@@ -408,6 +440,7 @@ class Runtime extends EventEmitter {
      * @const {number}
      */
     static get STAGE_WIDTH () {
+        // tw: stage size is set per-runtime, this is only the initial value
         return 480;
     }
 
@@ -416,6 +449,7 @@ class Runtime extends EventEmitter {
      * @const {number}
      */
     static get STAGE_HEIGHT () {
+        // tw: stage size is set per-runtime, this is only the initial value
         return 360;
     }
 
@@ -477,7 +511,7 @@ class Runtime extends EventEmitter {
     }
 
     /**
-     * Event name for compiler options changing.
+     * Event name for runtime options changing.
      * @const {string}
      */
     static get RUNTIME_OPTIONS_CHANGED () {
@@ -498,6 +532,14 @@ class Runtime extends EventEmitter {
      */
     static get FRAMERATE_CHANGED () {
         return 'FRAMERATE_CHANGED';
+    }
+
+    /**
+     * Event name for interpolation changing.
+     * @const {string}
+     */
+    static get INTERPOLATION_CHANGED () {
+        return 'INTERPOLATION_CHANGED';
     }
 
     /**
@@ -957,6 +999,31 @@ class Runtime extends EventEmitter {
                 );
 
                 categoryInfo.customFieldTypes[fieldTypeName] = fieldTypeInfo;
+            }
+        }
+
+        if (extensionInfo.docsURI) {
+            try {
+                const url = new URL(extensionInfo.docsURI);
+                if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+                    throw new Error('invalid protocol');
+                }
+                const xml = '<button ' +
+                    `text="${xmlEscape(maybeFormatMessage({
+                        // note: this translation is hardcoded in translation upload scripts
+                        id: 'tw.blocks.openDocs',
+                        default: 'Open Documentation',
+                        description: 'Button to open extensions docsURI'
+                    }))}" ` +
+                    'callbackKey="OPEN_DOCUMENTATION" ' +
+                    `web-class="docs-uri-${xmlEscape(extensionInfo.docsURI)}"></button>`;
+                const block = {
+                    info: {},
+                    xml
+                };
+                categoryInfo.blocks.push(block);
+            } catch (e) {
+                log.warn('cannot create docsURI button', e);
             }
         }
 
@@ -1613,6 +1680,7 @@ class Runtime extends EventEmitter {
      */
     attachAudioEngine (audioEngine) {
         this.audioEngine = audioEngine;
+        require('./tw-experimental-audio-optimizations')(audioEngine);
     }
 
     /**
@@ -1622,14 +1690,6 @@ class Runtime extends EventEmitter {
     attachRenderer (renderer) {
         this.renderer = renderer;
         this.renderer.setLayerGroupOrdering(StageLayering.LAYER_GROUPS);
-    }
-
-    /**
-     * Set the svg adapter, which converts scratch 2 svgs to scratch 3 svgs
-     * @param {!SvgRenderer} svgAdapter The adapter to attach
-     */
-    attachV2SVGAdapter (svgAdapter) {
-        this.v2SvgAdapter = svgAdapter;
     }
 
     /**
@@ -1860,6 +1920,10 @@ class Runtime extends EventEmitter {
             optMatchFields[opts] = optMatchFields[opts].toUpperCase();
         }
 
+        // tw: By assuming that all new threads will not interfere with eachother, we can optimize the loops
+        // inside the allScriptsByOpcodeDo callback below.
+        const startingThreadListLength = this.threads.length;
+
         // Consider all scripts, looking for hats with opcode `requestedHatOpcode`.
         this.allScriptsByOpcodeDo(requestedHatOpcode, (script, target) => {
             const {
@@ -1882,7 +1946,7 @@ class Runtime extends EventEmitter {
             if (hatMeta.restartExistingThreads) {
                 // If `restartExistingThreads` is true, we should stop
                 // any existing threads starting with the top block.
-                for (let i = 0; i < this.threads.length; i++) {
+                for (let i = 0; i < startingThreadListLength; i++) {
                     if (this.threads[i].target === target &&
                         this.threads[i].topBlock === topBlockId &&
                         // stack click threads and hat threads can coexist
@@ -1894,7 +1958,7 @@ class Runtime extends EventEmitter {
             } else {
                 // If `restartExistingThreads` is false, we should
                 // give up if any threads with the top block are running.
-                for (let j = 0; j < this.threads.length; j++) {
+                for (let j = 0; j < startingThreadListLength; j++) {
                     if (this.threads[j].target === target &&
                         this.threads[j].topBlock === topBlockId &&
                         // stack click threads and hat threads can coexist
@@ -2072,6 +2136,7 @@ class Runtime extends EventEmitter {
     greenFlag () {
         this.stopAll();
         this.emit(Runtime.PROJECT_START);
+        this.updateCurrentMSecs();
         this.ioDevices.clock.resetProjectTimer();
         this.targets.forEach(target => target.clearEdgeActivatedValues());
         // Inform all targets of the green flag.
@@ -2108,11 +2173,30 @@ class Runtime extends EventEmitter {
         this.threads = [];
     }
 
+    _animationFrame () {
+        this._animationFrameId = _requestAnimationFrame(this._animationFrame);
+
+        const frameStarted = this._lastStepTime;
+        const now = Date.now();
+        const timeSinceStart = now - frameStarted;
+        const progressInFrame = Math.min(1, Math.max(0, timeSinceStart / this.currentStepTime));
+
+        interpolate.interpolate(this, progressInFrame);
+
+        if (this.renderer) {
+            this.renderer.draw();
+        }
+    }
+
     /**
      * Repeatedly run `sequencer.stepThreads` and filter out
      * inactive threads after each iteration.
      */
     _step () {
+        if (this.interpolationEnabled) {
+            interpolate.setupInitialState(this);
+        }
+
         if (this.profiler !== null) {
             if (stepProfilerId === -1) {
                 stepProfilerId = this.profiler.idByName('Runtime._step');
@@ -2160,8 +2244,8 @@ class Runtime extends EventEmitter {
                 }
                 this.profiler.start(rendererDrawProfilerId);
             }
-            // tw: do not draw if document is hidden
-            if (!document.hidden) {
+            // tw: do not draw if document is hidden or a rAF loop is running
+            if (!document.hidden && this._animationFrameId === null) {
                 this.renderer.draw();
             }
             if (this.profiler !== null) {
@@ -2182,6 +2266,10 @@ class Runtime extends EventEmitter {
         if (this.profiler !== null) {
             this.profiler.stop();
             this.profiler.reportFrames();
+        }
+
+        if (this.interpolationEnabled) {
+            this._lastStepTime = Date.now();
         }
     }
 
@@ -2241,9 +2329,9 @@ class Runtime extends EventEmitter {
      * @param {number} framerate Target frames per second
      */
     setFramerate (framerate) {
-        // Setting framerate to anything greater than this is
-        // unnecessary and tricks the sequencer into thinking it has almost no work time.
-        if (framerate > 1000) framerate = 1000;
+        // Setting framerate to anything greater than this is unnecessary and can break the sequencer
+        // Additonally, the JS spec says intervals can't run more than once every 4ms anyways
+        if (framerate > 250) framerate = 250;
         this.framerate = framerate;
         if (this._steppingInterval) {
             clearInterval(this._steppingInterval);
@@ -2251,6 +2339,19 @@ class Runtime extends EventEmitter {
             this.start();
         }
         this.emit(Runtime.FRAMERATE_CHANGED, framerate);
+    }
+
+    /**
+     * tw: Enable or disable interpolation.
+     * @param {boolean} interpolationEnabled True if interpolation should be enabled.
+     */
+    setInterpolation (interpolationEnabled) {
+        this.interpolationEnabled = interpolationEnabled;
+        if (this._steppingInterval) {
+            this.stop();
+            this.start();
+        }
+        this.emit(Runtime.INTERPOLATION_CHANGED, interpolationEnabled);
     }
 
     /**
@@ -2283,6 +2384,85 @@ class Runtime extends EventEmitter {
         }
     }
 
+    findProjectOptionsComment () {
+        const target = this.getTargetForStage();
+        const comments = target.comments;
+        for (const comment of Object.values(comments)) {
+            if (comment.text.includes(COMMENT_CONFIG_MAGIC)) {
+                return comment;
+            }
+        }
+        return null;
+    }
+
+    parseProjectOptions () {
+        const comment = this.findProjectOptionsComment();
+        if (!comment) return;
+        const lineWithMagic = comment.text.split('\n').find(i => i.endsWith(COMMENT_CONFIG_MAGIC));
+        if (!lineWithMagic) {
+            log.warn('Config comment does not contain valid line');
+            return;
+        }
+
+        const jsonText = lineWithMagic.substr(0, lineWithMagic.length - COMMENT_CONFIG_MAGIC.length);
+        let parsed;
+        try {
+            parsed = ExtendedJSON.parse(jsonText);
+            if (!parsed || typeof parsed !== 'object') {
+                throw new Error('Invalid object');
+            }
+        } catch (e) {
+            log.warn('Config comment has invalid JSON', e);
+            return;
+        }
+
+        if (typeof parsed.framerate === 'number') {
+            this.setFramerate(parsed.framerate);
+        }
+        if (parsed.turbo) {
+            this.turboMode = true;
+            this.emit(Runtime.TURBO_MODE_ON);
+        }
+        if (parsed.interpolation) {
+            this.setInterpolation(true);
+        }
+        if (parsed.runtimeOptions) {
+            this.setRuntimeOptions(parsed.runtimeOptions);
+        }
+        if (parsed.hq) {
+            this.renderer.setUseHighQualityRender(true);
+        }
+    }
+
+    generateProjectOptions () {
+        const options = {};
+        options.framerate = this.framerate;
+        options.runtimeOptions = {
+            // Omitting warpTimer for now
+            maxClones: this.runtimeOptions.maxClones,
+            miscLimits: this.runtimeOptions.miscLimits
+        };
+        options.interpolation = this.interpolationEnabled;
+        options.turbo = this.turboMode;
+        options.hq = this.renderer ? this.renderer.useHighQualityRender : false;
+        return options;
+    }
+
+    storeProjectOptions () {
+        const options = this.generateProjectOptions();
+        // TODO: translate
+        const text = `Configuration for https://turbowarp.org/\nDo not edit by hand\n${ExtendedJSON.stringify(options)}${COMMENT_CONFIG_MAGIC}`;
+        const existingComment = this.findProjectOptionsComment();
+        if (existingComment) {
+            existingComment.text = text;
+        } else {
+            const target = this.getTargetForStage();
+            // TODO: smarter position logic
+            target.createComment(uid(), null, text, 50, 50, 350, 150, false);
+        }
+        this.emitProjectChanged();
+    }
+
     /**
      * Eagerly (re)compile all scripts within this project.
      */
@@ -2296,6 +2476,11 @@ class Runtime extends EventEmitter {
                 thread.tryCompile();
             }
         });
+    }
+
+    enableDebug () {
+        this.resetAllCaches();
+        this.debug = true;
     }
 
     /**
@@ -2724,6 +2909,10 @@ class Runtime extends EventEmitter {
         // Do not start if we are already running
         if (this._steppingInterval) return;
 
+        if (this.interpolationEnabled) {
+            this._animationFrameId = _requestAnimationFrame(this._animationFrame);
+        }
+
         const interval = 1000 / this.framerate;
         this.currentStepTime = interval;
         this._steppingInterval = setInterval(() => {
@@ -2742,6 +2931,13 @@ class Runtime extends EventEmitter {
         }
         clearInterval(this._steppingInterval);
         this._steppingInterval = null;
+
+        // tw: also cancel the animation frame loop
+        if (this._animationFrameId !== null) {
+            _cancelAnimationFrame(this._animationFrameId);
+            this._animationFrameId = null;
+        }
+
         this.emit(Runtime.RUNTIME_STOPPED);
     }
 
