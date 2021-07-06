@@ -19,6 +19,7 @@ const formatMessage = require('format-message');
 
 const Variable = require('./engine/variable');
 const newBlockIds = require('./util/new-block-ids');
+const ExtendedJSON = require('./tw-extended-json');
 
 const {loadCostume} = require('./import/load-costume.js');
 const {loadSound} = require('./import/load-sound.js');
@@ -252,6 +253,17 @@ class VirtualMachine extends EventEmitter {
         this.runtime.setCompilerOptions(compilerOptions);
     }
 
+    addAddonBlock (options) {
+        this.runtime.addAddonBlock(options);
+    }
+
+    storeProjectOptions () {
+        this.runtime.storeProjectOptions();
+        if (this.editingTarget.isStage) {
+            this.emitWorkspaceUpdate();
+        }
+    }
+
     enableDebug () {
         this.runtime.enableDebug();
     }
@@ -373,7 +385,7 @@ class VirtualMachine extends EventEmitter {
                         return reject(error);
                     }
                     if (typeof input !== 'string') input = new TextDecoder().decode(input);
-                    input = require('./tw-extended-json')(input);
+                    input = ExtendedJSON.parse(input);
                     input = JSON.stringify(input);
                     return validate(input, false, (error2, res2) => {
                         if (error2) return reject(error);
@@ -458,10 +470,6 @@ class VirtualMachine extends EventEmitter {
             compressionOptions: {
                 level: 6 // Tradeoff between best speed (1) and best compression (9)
             }
-        }).then(result => {
-            // tw: We want to let the GUI know whether this project uses block that won't work in Scratch.
-            result.usesExtendedExtensions = JSON.parse(projectJson).extensions.includes('tw');
-            return result;
         });
     }
 
@@ -592,7 +600,9 @@ class VirtualMachine extends EventEmitter {
      * @param {boolean} wholeProject - set to true if installing a whole project, as opposed to a single sprite.
      * @returns {Promise} resolved once targets have been installed
      */
-    installTargets (targets, extensions, wholeProject) {
+    async installTargets (targets, extensions, wholeProject) {
+        await this.extensionManager.allAsyncExtensionsLoaded();
+
         const extensionPromises = [];
 
         extensions.extensionIDs.forEach(extensionID => {
@@ -627,6 +637,10 @@ class VirtualMachine extends EventEmitter {
 
             if (!wholeProject) {
                 this.editingTarget.fixUpVariableReferences();
+            }
+
+            if (wholeProject) {
+                this.runtime.parseProjectOptions();
             }
 
             // Update the VM user's knowledge of targets and blocks on the workspace.
@@ -1076,6 +1090,9 @@ class VirtualMachine extends EventEmitter {
                 const oldName = sprite.name;
                 const newUnusedName = StringUtil.unusedName(newName, names);
                 sprite.name = newUnusedName;
+                if (oldName === newUnusedName) {
+                    return;
+                }
                 const allTargets = this.runtime.targets;
                 for (let i = 0; i < allTargets.length; i++) {
                     const currTarget = allTargets[i];
@@ -1392,15 +1409,24 @@ class VirtualMachine extends EventEmitter {
      */
     emitTargetsUpdate (triggerProjectChange) {
         if (typeof triggerProjectChange === 'undefined') triggerProjectChange = true;
+        let lazyTargetList;
+        const getTargetListLazily = () => {
+            if (!lazyTargetList) {
+                lazyTargetList = this.runtime.targets
+                    .filter(
+                        // Don't report clones.
+                        target => !target.hasOwnProperty('isOriginal') || target.isOriginal
+                    ).map(
+                        target => target.toJSON()
+                    );
+            }
+            return lazyTargetList;
+        };
         this.emit('targetsUpdate', {
             // [[target id, human readable target name], ...].
-            targetList: this.runtime.targets
-                .filter(
-                    // Don't report clones.
-                    target => !target.hasOwnProperty('isOriginal') || target.isOriginal
-                ).map(
-                    target => target.toJSON()
-                ),
+            get targetList () {
+                return getTargetListLazily();
+            },
             // Currently editing target id.
             editingTarget: this.editingTarget ? this.editingTarget.id : null
         });

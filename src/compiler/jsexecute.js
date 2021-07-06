@@ -2,16 +2,16 @@
  * Copyright (C) 2021 Thomas Weber
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 as
- * published by the Free Software Foundation.
+ * it under the terms of the GNU Lesser General Public License version 3
+ * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
 const Thread = require('../engine/thread');
@@ -198,6 +198,26 @@ const executeInCompatibilityLayer = function*(inputs, blockFunction, useFlags) {
 };
 
 /**
+ * Run an addon block.
+ * @param {string} procedureCode The block's procedure code
+ * @param {string} blockId The ID of the block being run
+ * @param {object} args The arguments to pass to the block
+ */
+const callAddonBlock = (procedureCode, blockId, args) => {
+    const addonBlock = thread.target.runtime.getAddonBlock(procedureCode);
+    if (addonBlock) {
+        const target = thread.target;
+        addonBlock.callback(args, {
+            // Shim enough of BlockUtility to make addons work
+            peekStack () {
+                return blockId;
+            },
+            target
+        });
+    }
+};
+
+/**
  * End the current script.
  */
 const retire = () => {
@@ -330,21 +350,14 @@ const timer = () => {
     return t;
 };
 
-// This is the "epoch" for the daysSince2000() function.
-// Storing this in a variable is faster than constantly recreating it.
-const daysSince2000Epoch = new Date(2000, 0, 1);
-
 /**
  * Returns the amount of days since January 1st, 2000.
  * @returns {number} Days since 2000.
  */
-const daysSince2000 = () => {
-    const today = new Date();
-    const dstAdjust = today.getTimezoneOffset() - daysSince2000Epoch.getTimezoneOffset();
-    let mSecsSinceStart = today.valueOf() - daysSince2000Epoch.valueOf();
-    mSecsSinceStart += ((today.getTimezoneOffset() - dstAdjust) * 60 * 1000);
-    return mSecsSinceStart / (24 * 60 * 60 * 1000);
-};
+const daysSince2000 = () =>
+    // Date.UTC(2000, 0, 1) === 946684800000
+    // Hardcoding it is marginally faster
+    (Date.now() - 946684800000) / (24 * 60 * 60 * 1000);
 
 /**
  * Determine distance to a sprite or point.

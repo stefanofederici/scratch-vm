@@ -335,6 +335,11 @@ class Blocks {
             }
         }
 
+        const addonBlock = this.runtime.getAddonBlock(name);
+        if (addonBlock) {
+            return addonBlock.namesIdsDefaults;
+        }
+
         this._cache.procedureParamNames[name] = null;
         return null;
     }
@@ -535,10 +540,7 @@ class Blocks {
                     currTarget.comments[e.commentId].y = e.xy.y;
                 }
             }
-            // tw: Ignore creation of default project comment
-            if (e.commentId !== 'UgZfouDT0`j;EW7Y3N2]') {
-                this.emitProjectChanged();
-            }
+            this.emitProjectChanged();
             break;
         case 'comment_change':
             this.resetCache(); // tw: comments can affect compilation

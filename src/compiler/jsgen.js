@@ -2,16 +2,16 @@
  * Copyright (C) 2021 Thomas Weber
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 as
- * published by the Free Software Foundation.
+ * it under the terms of the GNU Lesser General Public License version 3
+ * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
 const log = require('../util/log');
@@ -19,8 +19,11 @@ const Cast = require('../util/cast');
 const VariablePool = require('./variable-pool');
 const jsexecute = require('./jsexecute');
 const {disableToString} = require('./util');
-const {IntermediateScript, IntermediateRepresentation} = require('./intermediate');
 const environment = require('./environment');
+
+// Imported for JSDoc types, not to actually use
+// eslint-disable-next-line no-unused-vars
+const {IntermediateScript, IntermediateRepresentation} = require('./intermediate');
 
 /**
  * @fileoverview Convert intermediate representations to JavaScript functions.
@@ -337,9 +340,9 @@ class Frame {
 
 class JSGenerator {
     /**
-     * @param {IntermediateScript} script 
-     * @param {IntermediateRepresentation} ir 
-     * @param {Target} target 
+     * @param {IntermediateScript} script
+     * @param {IntermediateRepresentation} ir
+     * @param {Target} target
      */
     constructor (script, ir, target) {
         this.script = script;
@@ -654,9 +657,18 @@ class JSGenerator {
      */
     descendStackedBlock (node) {
         switch (node.kind) {
+        case 'addons.call':
+            this.source += `callAddonBlock("${sanitize(node.code)}","${sanitize(node.blockId)}",{`;
+            for (const argumentName of Object.keys(node.arguments)) {
+                const argumentValue = node.arguments[argumentName];
+                this.source += `"${sanitize(argumentName)}":${this.descendInput(argumentValue).asSafe()},`;
+            }
+            this.source += '});\n';
+            break;
+
         case 'compat': {
             // If the last command in a loop returns a promise, immediately continue to the next iteration.
-            // If you don't do this, you would the loop effectively yields twice per iteration and will run at half-speed.
+            // If you don't do this, the loop effectively yields twice per iteration and will run at half-speed.
             const isLastInLoop = this.isLastBlockInLoop();
             this.source += `${this.generateCompatibilityLayerCall(node, isLastInLoop)};\n`;
             if (isLastInLoop) {
@@ -665,10 +677,6 @@ class JSGenerator {
             break;
         }
 
-        case 'control.allAtOnce':
-            // Scratch 3 behavior is to treat this as essentially `if (true) {`
-            this.descendStack(node.do, new Frame(false));
-            break;
         case 'control.createClone':
             this.source += `runtime.ext_scratch3_control._createClone(${this.descendInput(node.target).asString()}, target);\n`;
             break;
@@ -687,6 +695,7 @@ class JSGenerator {
             this.source += `${index}++; `;
             this.source += `${this.referenceVariable(node.variable)}.value = ${index};\n`;
             this.descendStack(node.do, new Frame(true));
+            this.yieldLoop();
             this.source += '}\n';
             break;
         }
@@ -753,9 +762,11 @@ class JSGenerator {
 
         case 'event.broadcast':
             this.source += `startHats("event_whenbroadcastreceived", { BROADCAST_OPTION: ${this.descendInput(node.broadcast).asString()} });\n`;
+            this.resetVariableInputs();
             break;
         case 'event.broadcastAndWait':
             this.source += `yield* waitThreads(startHats("event_whenbroadcastreceived", { BROADCAST_OPTION: ${this.descendInput(node.broadcast).asString()} }));\n`;
+            this.yielded();
             break;
 
         case 'list.add': {

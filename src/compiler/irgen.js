@@ -2,16 +2,16 @@
  * Copyright (C) 2021 Thomas Weber
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 as
- * published by the Free Software Foundation.
+ * it under the terms of the GNU Lesser General Public License version 3
+ * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
 const Cast = require('../util/cast');
@@ -669,9 +669,15 @@ class ScriptTreeGenerator {
     descendStackedBlock (block) {
         switch (block.opcode) {
         case 'control_all_at_once':
+            // In Scratch 3, this block behaves like "if 1 = 1"
             return {
-                kind: 'control.allAtOnce',
-                do: this.descendSubstack(block, 'SUBSTACK')
+                kind: 'control.if',
+                condition: {
+                    kind: 'constant',
+                    value: true
+                },
+                whenTrue: this.descendSubstack(block, 'SUBSTACK'),
+                whenFalse: []
             };
         case 'control_create_clone_of':
             return {
@@ -1110,7 +1116,30 @@ class ScriptTreeGenerator {
                 };
             }
 
-            const [_paramNames, paramIds, paramDefaults] = paramNamesIdsAndDefaults;
+            const [paramNames, paramIds, paramDefaults] = paramNamesIdsAndDefaults;
+
+            const addonBlock = this.runtime.getAddonBlock(procedureCode);
+            if (addonBlock) {
+                const args = {};
+                for (let i = 0; i < paramIds.length; i++) {
+                    let value;
+                    if (block.inputs[paramIds[i]] && block.inputs[paramIds[i]].block) {
+                        value = this.descendInputOfBlock(block, paramIds[i]);
+                    } else {
+                        value = {
+                            kind: 'constant',
+                            value: paramDefaults[i]
+                        };
+                    }
+                    args[paramNames[i]] = value;
+                }
+                return {
+                    kind: 'addons.call',
+                    code: procedureCode,
+                    arguments: args,
+                    blockId: block.id
+                };
+            }
 
             if (!this.script.dependedProcedures.includes(procedureCode)) {
                 this.script.dependedProcedures.push(procedureCode);

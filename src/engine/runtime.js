@@ -17,6 +17,7 @@ const StageLayering = require('./stage-layering');
 const Variable = require('./variable');
 const xmlEscape = require('../util/xml-escape');
 const ScratchLinkWebSocket = require('../util/scratch-link-websocket');
+const ExtendedJSON = require('../tw-extended-json');
 
 // Virtual I/O devices.
 const Clock = require('../io/clock');
@@ -45,6 +46,8 @@ const defaultBlockPackages = {
 const interpolate = require('./tw-interpolate');
 
 const defaultExtensionColors = ['#0FBD8C', '#0DA57A', '#0B8E69'];
+
+const COMMENT_CONFIG_MAGIC = ' // _twconfig_';
 
 /**
  * Information used for converting Scratch argument types into scratch-blocks data.
@@ -206,6 +209,8 @@ class Runtime extends EventEmitter {
          * @type {Array.<Thread>}
          */
         this.threads = [];
+
+        this.threadMap = new Map();
 
         /** @type {!Sequencer} */
         this.sequencer = new Sequencer(this);
@@ -397,11 +402,20 @@ class Runtime extends EventEmitter {
          */
         this.removeCloudVariable = this._initializeRemoveCloudVariable(newCloudDataManager);
 
+        /**
+         * A string representing the origin of the current project from outside of the
+         * Scratch community, such as CSFirst.
+         * @type {?string}
+         */
+        this.origin = null;
+
         this._stageTarget = null;
 
         // 60 to match default of compatibility mode off
         // scratch-gui will set this to 30
         this.framerate = 60;
+
+        this.addonBlocks = {};
 
         this.stageWidth = Runtime.STAGE_WIDTH;
         this.stageHeight = Runtime.STAGE_HEIGHT;
@@ -1722,6 +1736,9 @@ class Runtime extends EventEmitter {
 
         thread.pushStack(id);
         this.threads.push(thread);
+        if (!thread.stackClick && !thread.updateMonitor) {
+            this.threadMap.set(thread.getId(), thread);
+        }
 
         // tw: compile new threads. Do not attempt to compile monitor threads.
         if (!(opts && opts.updateMonitor) && this.compilerOptions.enabled) {
@@ -1759,6 +1776,9 @@ class Runtime extends EventEmitter {
         // tw: when a thread is restarted, we have to check whether the previous script was attempted to be compiled.
         if (thread.triedToCompile && this.compilerOptions.enabled) {
             newThread.tryCompile();
+        }
+        if (!newThread.stackClick && !newThread.updateMonitor) {
+            this.threadMap.set(newThread.getId(), newThread);
         }
         const i = this.threads.indexOf(thread);
         if (i > -1) {
@@ -1936,14 +1956,10 @@ class Runtime extends EventEmitter {
             if (hatMeta.restartExistingThreads) {
                 // If `restartExistingThreads` is true, we should stop
                 // any existing threads starting with the top block.
-                for (let i = 0; i < startingThreadListLength; i++) {
-                    if (this.threads[i].target === target &&
-                        this.threads[i].topBlock === topBlockId &&
-                        // stack click threads and hat threads can coexist
-                        !this.threads[i].stackClick) {
-                        newThreads.push(this._restartThread(this.threads[i]));
-                        return;
-                    }
+                const existingThread = this.threadMap.get(Thread.getIdFromTargetAndBlock(target, topBlockId));
+                if (existingThread) {
+                    newThreads.push(this._restartThread(existingThread));
+                    return;
                 }
             } else {
                 // If `restartExistingThreads` is false, we should
@@ -1986,7 +2002,7 @@ class Runtime extends EventEmitter {
         });
 
         this.targets.map(this.disposeTarget, this);
-        // tw: when disposing runtime, explicitly emit a MONITORS_UPDATE instead of relying on implicit behavior of _step()
+        // tw: explicitly emit a MONITORS_UPDATE instead of relying on implicit behavior of _step()
         const emptyMonitorState = OrderedMap({});
         if (!emptyMonitorState.equals(this._monitorState)) {
             this._monitorState = emptyMonitorState;
@@ -2161,6 +2177,7 @@ class Runtime extends EventEmitter {
         }
         // Remove all remaining threads from executing in the next tick.
         this.threads = [];
+        this.threadMap.clear();
     }
 
     _animationFrame () {
@@ -2175,6 +2192,15 @@ class Runtime extends EventEmitter {
 
         if (this.renderer) {
             this.renderer.draw();
+        }
+    }
+
+    updateThreadMap () {
+        this.threadMap.clear();
+        for (const thread of this.threads) {
+            if (!thread.stackClick && !thread.updateMonitor) {
+                this.threadMap.set(thread.getId(), thread);
+            }
         }
     }
 
@@ -2198,6 +2224,7 @@ class Runtime extends EventEmitter {
 
         // Clean up threads that were told to stop during or since the last step
         this.threads = this.threads.filter(thread => !thread.isKilled);
+        this.updateThreadMap();
 
         // Find all edge-activated hats, and add them to threads to be evaluated.
         for (const hatType in this._hats) {
@@ -2374,6 +2401,138 @@ class Runtime extends EventEmitter {
                 target.blocks.resetCache();
             }
         }
+        this.flyoutBlocks.resetCache();
+        this.monitorBlocks.resetCache();
+    }
+
+    /**
+     * Add an "addon block"
+     * @param {object} options Options object
+     * @param {string} options.procedureCode The ID of the block
+     * @param {function} options.callback The callback, called with (args, BlockUtility)
+     * @param {string[]} options.arguments Names of the arguments accepted
+     * @param {string} options.color Primary color
+     * @param {string} options.secondaryColor Secondary color
+     */
+    addAddonBlock (options) {
+        const procedureCode = options.procedureCode;
+        const names = options.arguments;
+        const ids = options.arguments.map((_, i) => `arg${i}`);
+        const defaults = options.arguments.map(() => '');
+        this.addonBlocks[procedureCode] = {
+            namesIdsDefaults: [names, ids, defaults],
+            ...options
+        };
+
+        const ID = 'a-b';
+        let blockInfo = this._blockInfo.find(i => i.id === ID);
+        if (!blockInfo) {
+            blockInfo = {
+                id: ID,
+                name: 'Addons',
+                color1: options.color,
+                color2: options.secondaryColor,
+                color3: options.secondaryColor,
+                blocks: [],
+                customFieldTypes: {},
+                menus: []
+            };
+            this._blockInfo.splice(1, 0, blockInfo);
+        }
+        blockInfo.blocks.push({
+            info: {},
+            xml:
+               '<block type="procedures_call" gap="16"><mutation generateshadows="true" warp="false"' +
+                ` proccode="${xmlEscape(procedureCode)}"` +
+                ` argumentnames="${xmlEscape(JSON.stringify(names))}"` +
+                ` argumentids="${xmlEscape(JSON.stringify(ids))}"` +
+                ` argumentdefaults="${xmlEscape(JSON.stringify(defaults))}"` +
+                '></mutation></block>'
+        });
+
+        this.resetAllCaches();
+    }
+
+    getAddonBlock (procedureCode) {
+        if (Object.prototype.hasOwnProperty.call(this.addonBlocks, procedureCode)) {
+            return this.addonBlocks[procedureCode];
+        }
+        return null;
+    }
+
+    findProjectOptionsComment () {
+        const target = this.getTargetForStage();
+        const comments = target.comments;
+        for (const comment of Object.values(comments)) {
+            if (comment.text.includes(COMMENT_CONFIG_MAGIC)) {
+                return comment;
+            }
+        }
+        return null;
+    }
+
+    parseProjectOptions () {
+        const comment = this.findProjectOptionsComment();
+        if (!comment) return;
+        const lineWithMagic = comment.text.split('\n').find(i => i.endsWith(COMMENT_CONFIG_MAGIC));
+        if (!lineWithMagic) {
+            log.warn('Config comment does not contain valid line');
+            return;
+        }
+
+        const jsonText = lineWithMagic.substr(0, lineWithMagic.length - COMMENT_CONFIG_MAGIC.length);
+        let parsed;
+        try {
+            parsed = ExtendedJSON.parse(jsonText);
+            if (!parsed || typeof parsed !== 'object') {
+                throw new Error('Invalid object');
+            }
+        } catch (e) {
+            log.warn('Config comment has invalid JSON', e);
+            return;
+        }
+
+        if (typeof parsed.framerate === 'number') {
+            this.setFramerate(parsed.framerate);
+        }
+        if (parsed.turbo) {
+            this.turboMode = true;
+            this.emit(Runtime.TURBO_MODE_ON);
+        }
+        if (parsed.interpolation) {
+            this.setInterpolation(true);
+        }
+        if (parsed.runtimeOptions) {
+            this.setRuntimeOptions(parsed.runtimeOptions);
+        }
+        if (parsed.hq && this.renderer) {
+            this.renderer.setUseHighQualityRender(true);
+        }
+    }
+
+    generateProjectOptions () {
+        const options = {};
+        options.framerate = this.framerate;
+        options.runtimeOptions = this.runtimeOptions;
+        options.interpolation = this.interpolationEnabled;
+        options.turbo = this.turboMode;
+        options.hq = this.renderer ? this.renderer.useHighQualityRender : false;
+        return options;
+    }
+
+    storeProjectOptions () {
+        const options = this.generateProjectOptions();
+        // TODO: translate
+        const text = `Configuration for https://turbowarp.org/\nDo not edit by hand\n${ExtendedJSON.stringify(options)}${COMMENT_CONFIG_MAGIC}`;
+        const existingComment = this.findProjectOptionsComment();
+        if (existingComment) {
+            existingComment.text = text;
+        } else {
+            const target = this.getTargetForStage();
+            // TODO: smarter position logic
+            target.createComment(uid(), null, text, 50, 50, 350, 150, false);
+        }
+        this.emitProjectChanged();
     }
 
     /**
