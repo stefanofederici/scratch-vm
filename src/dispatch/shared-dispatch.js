@@ -1,5 +1,9 @@
 const log = require('../util/log');
 
+const fixArgumentList = args => {
+    args.length = 1;
+};
+
 /**
  * @typedef {object} DispatchCallMessage - a message to the dispatch system representing a service method call
  * @property {*} responseId - send a response message with this response ID. See {@link DispatchResponseMessage}
@@ -127,13 +131,7 @@ class SharedDispatch {
             const responseId = this._storeCallbacks(resolve, reject);
 
             /** @TODO: remove this hack! this is just here so we don't try to send `util` to a worker */
-            // tw: upstream's logic is broken
-            // Args is actually a 3 length list of [args, util, real block info]
-            // We only want to send args. The others will throw errors when they try to be cloned
-            if ((args.length > 0) && (typeof args[args.length - 1].func === 'function')) {
-                args.pop();
-                args.pop();
-            }
+            fixArgumentList(args);
 
             if (transfer) {
                 provider.postMessage({service, method, responseId, args}, transfer);
