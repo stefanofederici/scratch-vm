@@ -13,12 +13,14 @@ class ExtensionWorker {
         this.initialRegistrations = [];
 
         dispatch.waitForConnection.then(() => {
-            dispatch.call('extensions', 'allocateWorker').then(x => {
+            dispatch.call('extensions', 'allocateWorker').then(async x => {
                 const [id, extension] = x;
                 this.workerId = id;
 
                 try {
-                    importScripts(extension);
+                    const res = await fetch(extension);
+                    const text = await res.text();
+                    new Function(text)();
 
                     const initialRegistrations = this.initialRegistrations;
                     this.initialRegistrations = null;

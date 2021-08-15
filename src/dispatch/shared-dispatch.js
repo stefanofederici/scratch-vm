@@ -1,7 +1,17 @@
 const log = require('../util/log');
+const binaryClone = require('../util/tw-binary-clone');
 
 const fixArgumentList = args => {
     args.length = 1;
+};
+
+const isPromise = value => value && typeof value.then === 'function';
+
+const toPromise = value => {
+    if (value && typeof value.then === 'function') {
+        return value;
+    }
+    return Promise.resolve(value);
 };
 
 /**
@@ -60,7 +70,25 @@ class SharedDispatch {
      * @returns {Promise} - a promise for the return value of the service method.
      */
     call (service, method, ...args) {
-        return this.transferCall(service, method, null, ...args);
+        return toPromise(this.transferCall(service, method, null, ...args));
+    }
+
+    callRemoteSync (service, method, ...args) {
+        const {provider, isRemote} = this._getServiceProvider(service);
+        if (!provider) {
+            throw new Error(`Provider not found for service: ${service}`);
+        }
+        if (!isRemote) {
+            return this.callSync(service, method, ...args);
+        }
+
+        fixArgumentList(args);
+
+        // eslint-disable-next-line no-undef
+        const buffer = new SharedArrayBuffer(1024);
+        binaryClone.reset(buffer);
+        provider.postMessage({service, method, args, sharedBuffer: buffer});
+        return binaryClone.waitAndDecode(buffer);
     }
 
     /**
@@ -76,7 +104,7 @@ class SharedDispatch {
      * @param {string} method - the name of the method.
      * @param {Array} [transfer] - objects to be transferred instead of copied. Must be present in `args` to be useful.
      * @param {*} [args] - the arguments to be copied to the method, if any.
-     * @returns {Promise} - a promise for the return value of the service method.
+     * @returns {*|Promise} - a promise or value for the return value of the service method.
      */
     transferCall (service, method, transfer, ...args) {
         try {
@@ -87,7 +115,7 @@ class SharedDispatch {
                 }
 
                 const result = provider[method].apply(provider, args);
-                return Promise.resolve(result);
+                return result;
             }
             return Promise.reject(new Error(`Service not found: ${service}`));
         } catch (e) {
@@ -185,9 +213,12 @@ class SharedDispatch {
         const message = event.data;
         message.args = message.args || [];
         let promise;
+        const sharedBuffer = message.sharedBuffer;
         if (message.service) {
             if (message.service === 'dispatch') {
                 promise = this._onDispatchMessage(worker, message);
+            } else if (sharedBuffer) {
+                promise = this.transferCall(message.service, message.method, null, ...message.args);
             } else {
                 promise = this.call(message.service, message.method, ...message.args);
             }
@@ -195,6 +226,14 @@ class SharedDispatch {
             log.error(`Dispatch caught malformed message from a worker: ${JSON.stringify(event)}`);
         } else {
             this._deliverResponse(message.responseId, message);
+        }
+        if (sharedBuffer) {
+            if (isPromise(promise)) {
+                binaryClone.encodeError(sharedBuffer);
+            } else {
+                binaryClone.encodeResult(sharedBuffer, promise);
+            }
+            return;
         }
         if (promise) {
             if (typeof message.responseId === 'undefined') {
