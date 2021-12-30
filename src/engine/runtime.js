@@ -351,13 +351,6 @@ class Runtime extends EventEmitter {
          */
         this.peripheralExtensions = {};
 
-        /**
-         * A runtime profiler that records timed events for later playback to
-         * diagnose Scratch performance.
-         * @type {Profiler}
-         */
-        this.profiler = null;
-
         this.cloudOptions = {
             limit: 100
         };
@@ -2202,13 +2195,6 @@ class Runtime extends EventEmitter {
             interpolate.setupInitialState(this);
         }
 
-        if (this.profiler !== null) {
-            if (stepProfilerId === -1) {
-                stepProfilerId = this.profiler.idByName('Runtime._step');
-            }
-            this.profiler.start(stepProfilerId);
-        }
-
         // Clean up threads that were told to stop during or since the last step
         this.threads = this.threads.filter(thread => !thread.isKilled);
         this.updateThreadMap();
@@ -2223,16 +2209,7 @@ class Runtime extends EventEmitter {
         }
         this.redrawRequested = false;
         this._pushMonitors();
-        if (this.profiler !== null) {
-            if (stepThreadsProfilerId === -1) {
-                stepThreadsProfilerId = this.profiler.idByName('Sequencer.stepThreads');
-            }
-            this.profiler.start(stepThreadsProfilerId);
-        }
         const doneThreads = this.sequencer.stepThreads();
-        if (this.profiler !== null) {
-            this.profiler.stop();
-        }
         this._updateGlows(doneThreads);
         // Add done threads so that even if a thread finishes within 1 frame, the green
         // flag will still indicate that a script ran.
@@ -2244,20 +2221,11 @@ class Runtime extends EventEmitter {
         this._lastStepDoneThreads = doneThreads;
         if (this.renderer) {
             // @todo: Only render when this.redrawRequested or clones rendered.
-            if (this.profiler !== null) {
-                if (rendererDrawProfilerId === -1) {
-                    rendererDrawProfilerId = this.profiler.idByName('RenderWebGL.draw');
-                }
-                this.profiler.start(rendererDrawProfilerId);
-            }
             // tw: do not draw if document is hidden or a rAF loop is running
             // Checking for the animation frame loop is more reliable than using
             // interpolationEnabled in some edge cases
             if (!document.hidden && !this.frameLoop._interpolationAnimation) {
                 this.renderer.draw();
-            }
-            if (this.profiler !== null) {
-                this.profiler.stop();
             }
         }
 
@@ -2269,11 +2237,6 @@ class Runtime extends EventEmitter {
         if (!this._prevMonitorState.equals(this._monitorState)) {
             this.emit(Runtime.MONITORS_UPDATE, this._monitorState);
             this._prevMonitorState = this._monitorState;
-        }
-
-        if (this.profiler !== null) {
-            this.profiler.stop();
-            this.profiler.reportFrames();
         }
 
         if (this.interpolationEnabled) {
@@ -2989,17 +2952,15 @@ class Runtime extends EventEmitter {
      * @param {Profiler/FrameCallback} onFrame A callback handle passed a
      * profiling frame when the profiler reports its collected data.
      */
-    enableProfiling (onFrame) {
-        if (Profiler.available()) {
-            this.profiler = new Profiler(onFrame);
-        }
+    enableProfiling () {
+        // no-op
     }
 
     /**
      * Turn off profiling.
      */
     disableProfiling () {
-        this.profiler = null;
+        // no-op
     }
 
     /**

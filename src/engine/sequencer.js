@@ -90,13 +90,6 @@ class Sequencer {
                numActiveThreads > 0 &&
                this.timer.timeElapsed() < WORK_TIME &&
                (this.runtime.turboMode || !this.runtime.redrawRequested)) {
-            if (this.runtime.profiler !== null) {
-                if (stepThreadsInnerProfilerId === -1) {
-                    stepThreadsInnerProfilerId = this.runtime.profiler.idByName(stepThreadsInnerProfilerFrame);
-                }
-                this.runtime.profiler.start(stepThreadsInnerProfilerId);
-            }
-
             numActiveThreads = 0;
             let stoppedThread = false;
             // Attempt to run each thread one time.
@@ -117,15 +110,6 @@ class Sequencer {
                 }
                 if (activeThread.status === Thread.STATUS_RUNNING ||
                     activeThread.status === Thread.STATUS_YIELD) {
-                    // Normal-mode thread: step.
-                    if (this.runtime.profiler !== null) {
-                        if (stepThreadProfilerId === -1) {
-                            stepThreadProfilerId = this.runtime.profiler.idByName(stepThreadProfilerFrame);
-                        }
-
-                        // Increment the number of times stepThread is called.
-                        this.runtime.profiler.increment(stepThreadProfilerId);
-                    }
                     this.stepThread(activeThread);
                     activeThread.warpTimer = null;
                     if (activeThread.isKilled) {
@@ -146,10 +130,6 @@ class Sequencer {
             // We successfully ticked once. Prevents running STATUS_YIELD_TICK
             // threads on the next tick.
             ranFirstTick = true;
-
-            if (this.runtime.profiler !== null) {
-                this.runtime.profiler.stop();
-            }
 
             // Filter inactive threads from `this.runtime.threads`.
             if (stoppedThread) {
@@ -203,15 +183,6 @@ class Sequencer {
                 // This will start counting the thread toward `Sequencer.WARP_TIME`.
                 thread.warpTimer = new Timer();
                 thread.warpTimer.start();
-            }
-            // Execute the current block.
-            if (this.runtime.profiler !== null) {
-                if (executeProfilerId === -1) {
-                    executeProfilerId = this.runtime.profiler.idByName(executeProfilerFrame);
-                }
-
-                // Increment the number of times execute is called.
-                this.runtime.profiler.increment(executeProfilerId);
             }
             if (thread.target === null) {
                 this.retireThread(thread);

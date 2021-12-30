@@ -561,20 +561,6 @@ const execute = function (sequencer, thread) {
             }
         }
     }
-
-    if (runtime.profiler !== null) {
-        if (blockCached._profiler !== runtime.profiler) {
-            _prepareBlockProfiling(runtime.profiler, blockCached);
-        }
-        // Determine the index that is after the last executed block. `i` is
-        // currently the block that was just executed. `i + 1` will be the block
-        // after that. `length` with the min call makes sure we don't try to
-        // reference an operation outside of the set of operations.
-        const end = Math.min(i + 1, length);
-        for (let p = start; p < end; p++) {
-            ops[p]._profilerFrame.count += 1;
-        }
-    }
 };
 
 module.exports = execute;
