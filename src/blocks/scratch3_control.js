@@ -83,6 +83,17 @@ class Scratch3ControlBlocks {
         }
     }
 
+    // SF: NEW
+    foreverIf (args, util) {
+        const condition = Cast.toBoolean(args.CONDITION);
+        // If the condition is true (repeat IF), start the branch.
+        if (condition) {
+            util.startBranch(1, true);
+        } else {
+			util.yield();
+		}
+    }
+
     forEach (args, util) {
         const variable = util.target.lookupOrCreateVariable(
             args.VARIABLE.id, args.VARIABLE.name);
