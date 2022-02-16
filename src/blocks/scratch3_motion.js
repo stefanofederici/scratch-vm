@@ -17,6 +17,9 @@ class Scratch3MotionBlocks {
      */
     getPrimitives () {
         return {
+			// SF: NEW
+			motion_move100steps: this.move100Steps,
+
             motion_movesteps: this.moveSteps,
             motion_gotoxy: this.goToXY,
             motion_goto: this.goTo,
@@ -61,15 +64,21 @@ class Scratch3MotionBlocks {
         };
     }
 
-    moveSteps (args, util) {
-        const steps = Cast.toNumber(args.STEPS);
-        this._moveSteps(steps, util.target);
-    }
-    _moveSteps (steps, target) { // used by compiler
-        const radians = MathUtil.degToRad(90 - target.direction);
+	// SF: NEW:
+	move100Steps (args, util) {
+        const steps = 100;
+        const radians = MathUtil.degToRad(90 - util.target.direction);
         const dx = steps * Math.cos(radians);
         const dy = steps * Math.sin(radians);
-        target.setXY(target.x + dx, target.y + dy);
+        util.target.setXY(util.target.x + dx, util.target.y + dy);
+    }
+
+    moveSteps (args, util) {
+        const steps = Cast.toNumber(args.STEPS);
+        const radians = MathUtil.degToRad(90 - util.target.direction);
+        const dx = steps * Math.cos(radians);
+        const dy = steps * Math.sin(radians);
+        util.target.setXY(util.target.x + dx, util.target.y + dy);
     }
 
     goToXY (args, util) {
@@ -85,8 +94,8 @@ class Scratch3MotionBlocks {
             targetX = util.ioQuery('mouse', 'getScratchX');
             targetY = util.ioQuery('mouse', 'getScratchY');
         } else if (targetName === '_random_') {
-            const stageWidth = this.runtime.stageWidth;
-            const stageHeight = this.runtime.stageHeight;
+            const stageWidth = this.runtime.constructor.STAGE_WIDTH;
+            const stageHeight = this.runtime.constructor.STAGE_HEIGHT;
             targetX = Math.round(stageWidth * (Math.random() - 0.5));
             targetY = Math.round(stageHeight * (Math.random() - 0.5));
         } else {
@@ -187,18 +196,15 @@ class Scratch3MotionBlocks {
     }
 
     ifOnEdgeBounce (args, util) {
-        this._ifOnEdgeBounce(util.target);
-    }
-    _ifOnEdgeBounce (target) { // used by compiler
-        const bounds = target.getBounds();
+        const bounds = util.target.getBounds();
         if (!bounds) {
             return;
         }
         // Measure distance to edges.
         // Values are positive when the sprite is far away,
         // and clamped to zero when the sprite is beyond.
-        const stageWidth = this.runtime.stageWidth;
-        const stageHeight = this.runtime.stageHeight;
+        const stageWidth = this.runtime.constructor.STAGE_WIDTH;
+        const stageHeight = this.runtime.constructor.STAGE_HEIGHT;
         const distLeft = Math.max(0, (stageWidth / 2) + bounds.left);
         const distTop = Math.max(0, (stageHeight / 2) - bounds.top);
         const distRight = Math.max(0, (stageWidth / 2) - bounds.right);
@@ -226,7 +232,7 @@ class Scratch3MotionBlocks {
             return; // Not touching any edge.
         }
         // Point away from the nearest edge.
-        const radians = MathUtil.degToRad(90 - target.direction);
+        const radians = MathUtil.degToRad(90 - util.target.direction);
         let dx = Math.cos(radians);
         let dy = -Math.sin(radians);
         if (nearestEdge === 'left') {
@@ -239,10 +245,10 @@ class Scratch3MotionBlocks {
             dy = 0 - Math.max(0.2, Math.abs(dy));
         }
         const newDirection = MathUtil.radToDeg(Math.atan2(dy, dx)) + 90;
-        target.setDirection(newDirection);
+        util.target.setDirection(newDirection);
         // Keep within the stage.
-        const fencedPosition = target.keepInFence(target.x, target.y);
-        target.setXY(fencedPosition[0], fencedPosition[1]);
+        const fencedPosition = util.target.keepInFence(util.target.x, util.target.y);
+        util.target.setXY(fencedPosition[0], fencedPosition[1]);
     }
 
     setRotationStyle (args, util) {
