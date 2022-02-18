@@ -80,7 +80,9 @@ class Scratch3ControlBlocks {
         // If the condition is true (repeat WHILE), start the branch.
         if (condition) {
             util.startBranch(1, true);
-        }
+        } else {
+			util.yield();
+		}
     }
 
     // SF: NEW
