@@ -26,6 +26,9 @@ class Scratch3ControlBlocks {
             control_repeat: this.repeat,
             control_repeat_until: this.repeatUntil,
             control_while: this.repeatWhile,
+            // SF: NEW:
+            control_foreverif: this.foreverIf,
+            
             control_for_each: this.forEach,
             control_forever: this.forever,
             control_wait: this.wait,
